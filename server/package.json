@@ -1,0 +1,14 @@
+{
+  "name": "karswcol-server",
+  "version": "0.1.0",
+  "description": "KARSWCOL - servidor autoritativo de carreras (WebSocket + game loop a tick fijo)",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
