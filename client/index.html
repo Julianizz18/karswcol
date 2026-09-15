@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KARSWCOL</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%2233%22 fill=%22%23FCD116%22/><rect y=%2233%22 width=%22100%22 height=%2233%22 fill=%22%23003893%22/><rect y=%2266%22 width=%22100%22 height=%2234%22 fill=%22%23CE1126%22/></svg>" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div id="screen-menu" class="screen active">
+  <div class="menu-box">
+    <h1 class="logo">KARS<span class="hi">W</span>COL</h1>
+    <p class="tagline">Carreras 2D multijugador con sabor colombiano</p>
+    <nav class="menu-nav">
+      <button data-nav="join">Jugar</button>
+      <button data-nav="help">Cómo jugar</button>
+      <button data-nav="credits">Créditos</button>
+    </nav>
+  </div>
+</div>
+
+<div id="screen-help" class="screen">
+  <div class="panel">
+    <h2>Cómo jugar</h2>
+    <ul class="help-list">
+      <li>Flechas ↑ ↓ para acelerar / frenar, ← → para girar.</li>
+      <li>Completa 3 vueltas pasando por los puntos de control en orden.</li>
+      <li>El servidor decide la posición real de cada kart: lo que ves ya fue validado por él.</li>
+    </ul>
+    <button data-nav="menu" class="btn-back">Volver</button>
+  </div>
+</div>
+
+<div id="screen-credits" class="screen">
+  <div class="panel">
+    <h2>Créditos</h2>
+    <p><strong>Proyecto:</strong> KARSWCOL — Carreras 2D multijugador en tiempo real</p>
+    <p><strong>Squad:</strong> Gato Dumas</p>
+    <ul class="help-list">
+      <li>Sara Arteaga</li>
+      <li>Johan Beltrán</li>
+      <li>Julian Tinjaca</li>
+    </ul>
+    <p class="muted">Escuela Colombiana de Ingeniería Julio Garavito — ARSW 2026-2</p>
+    <button data-nav="menu" class="btn-back">Volver</button>
+  </div>
+</div>
+
+<div id="screen-join" class="screen">
+  <div class="panel">
+    <h2>Ingresa tu nombre</h2>
+    <input id="name-input" maxlength="20" placeholder="Tu nombre de piloto" />
+    <p class="muted" style="margin-bottom:6px;">Elige el color de tu kart</p>
+    <div id="color-picker" class="color-picker"></div>
+    <button id="btn-enter-lobby">Entrar al lobby</button>
+    <button data-nav="menu" class="btn-back">Volver</button>
+    <p id="join-error" class="error"></p>
+  </div>
+</div>
+
+<div id="screen-lobby" class="screen">
+  <div class="panel wide">
+    <h2>Lobby</h2>
+    <p class="muted">Esperando pilotos (mín. 1 para pruebas, ideal 4-8)</p>
+    <ul id="lobby-players" class="player-list"></ul>
+    <button id="btn-ready">Estoy listo</button>
+    <div id="countdown" class="countdown"></div>
+  </div>
+</div>
+
+<div id="screen-race" class="screen">
+  <div class="race-wrap">
+    <div class="hud">
+      <span id="hud-lap">Vuelta 0/3</span>
+      <span id="hud-weather"></span>
+      <span id="hud-hint">↑↓ acelerar/frenar · ←→ girar</span>
+    </div>
+    <canvas id="race-canvas" width="900" height="560"></canvas>
+    <div class="speed-bar"><div id="speed-fill" class="speed-fill"></div></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="screen-results" class="screen">
+  <div class="panel wide">
+    <h2>Resultados</h2>
+    <ol id="results-list" class="results-list"></ol>
+    <button id="btn-back-lobby">Volver al lobby</button>
+  </div>
+</div>
+
+<script src="js/network.js"></script>
+<script src="js/router.js"></script>
+<script src="js/race.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
