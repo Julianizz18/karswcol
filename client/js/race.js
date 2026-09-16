@@ -1,6 +1,18 @@
 // Dibuja el estado que llega del servidor cada tick. No calcula física propia.
 const KART_COLORS = ['#FCD116', '#CE1126', '#00A99D', '#8E44AD', '#E67E22', '#2ECC71', '#3498DB', '#EC407A'];
 
+// El color rojo de la flota usa un sprite propio (bus de TransMilenio) en
+// vez del kart dibujado en canvas, como prueba de vehículo personalizado.
+const SPECIAL_SPRITES = {
+  '#CE1126': (() => {
+    const img = new Image();
+    let ready = false;
+    img.onload = () => { ready = true; };
+    img.src = 'img/kart-transmilenio.png';
+    return { img, isReady: () => ready };
+  })()
+};
+
 const Race = (() => {
   const canvas = document.getElementById('race-canvas');
   const ctx = canvas.getContext('2d');
@@ -186,6 +198,8 @@ const Race = (() => {
   }
 
   function drawKart(p, color, isSelf) {
+    const special = SPECIAL_SPRITES[(color || '').toUpperCase()];
+
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.rotate(p.angle);
@@ -194,27 +208,38 @@ const Race = (() => {
       ctx.shadowBlur = 18;
     }
 
-    ctx.fillStyle = '#111';
-    ctx.fillRect(-6, -9, 7, 4);
-    ctx.fillRect(-6, 5, 7, 4);
+    if (special && special.isReady()) {
+      const w = 56;
+      const h = w * (special.img.naturalHeight / special.img.naturalWidth);
+      ctx.drawImage(special.img, -w / 2, -h / 2, w, h);
+      if (isSelf) {
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(-w / 2, -h / 2, w, h);
+      }
+    } else {
+      ctx.fillStyle = '#111';
+      ctx.fillRect(-6, -9, 7, 4);
+      ctx.fillRect(-6, 5, 7, 4);
 
-    ctx.fillStyle = color;
-    ctx.strokeStyle = isSelf ? '#fff' : 'rgba(0,0,0,0.35)';
-    ctx.lineWidth = isSelf ? 2.5 : 1.5;
-    ctx.beginPath();
-    ctx.moveTo(13, 0);
-    ctx.lineTo(2, -7);
-    ctx.lineTo(-9, -6);
-    ctx.lineTo(-9, 6);
-    ctx.lineTo(2, 7);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+      ctx.fillStyle = color;
+      ctx.strokeStyle = isSelf ? '#fff' : 'rgba(0,0,0,0.35)';
+      ctx.lineWidth = isSelf ? 2.5 : 1.5;
+      ctx.beginPath();
+      ctx.moveTo(13, 0);
+      ctx.lineTo(2, -7);
+      ctx.lineTo(-9, -6);
+      ctx.lineTo(-9, 6);
+      ctx.lineTo(2, 7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
 
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.beginPath();
-    ctx.arc(-1, 0, 3.2, 0, Math.PI * 2);
-    ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath();
+      ctx.arc(-1, 0, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     ctx.restore();
 
