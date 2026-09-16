@@ -223,7 +223,7 @@ const Race = (() => {
     ctx.textAlign = 'center';
     ctx.shadowColor = 'rgba(0,0,0,0.6)';
     ctx.shadowBlur = 3;
-    ctx.fillText(p.name, p.x, p.y - 16);
+    ctx.fillText(p.isBot ? `🤖 ${p.name}` : p.name, p.x, p.y - 16);
     ctx.shadowBlur = 0;
   }
 

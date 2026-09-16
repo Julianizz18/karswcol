@@ -43,6 +43,36 @@
     });
   }
 
+  function renderDifficultyPicker(difficulties, selected) {
+    const container = document.getElementById('difficulty-picker');
+    const alreadyBuilt = container.children.length === difficulties.length &&
+      [...container.children].every((btn, i) => btn.dataset.id === difficulties[i].id);
+
+    if (!alreadyBuilt) {
+      container.innerHTML = '';
+      difficulties.forEach(d => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.id = d.id;
+        btn.textContent = d.label;
+        btn.addEventListener('click', () => Net.send('select_difficulty', { difficulty: d.id }));
+        container.appendChild(btn);
+      });
+    }
+
+    container.querySelectorAll('button').forEach(btn => {
+      btn.classList.toggle('selected', btn.dataset.id === selected);
+    });
+  }
+
+  let fillWithBots = false;
+
+  function updateBotsButton() {
+    const btn = document.getElementById('btn-toggle-bots');
+    btn.classList.toggle('active', fillWithBots);
+    btn.textContent = fillWithBots ? '🤖 Bots activados' : '🤖 Completar con bots';
+  }
+
   function showToast(text) {
     const el = document.getElementById('toast');
     el.textContent = text;
@@ -75,6 +105,11 @@
       });
 
       if (msg.tracks) renderTrackPicker(msg.tracks, msg.selectedTrackId);
+      if (msg.difficulties) renderDifficultyPicker(msg.difficulties, msg.selectedDifficulty);
+      if (typeof msg.fillWithBots === 'boolean') {
+        fillWithBots = msg.fillWithBots;
+        updateBotsButton();
+      }
     });
 
     Net.on('countdown', msg => {
@@ -145,6 +180,10 @@
     }
   });
 
+  document.getElementById('btn-toggle-bots').addEventListener('click', () => {
+    Net.send('toggle_bots', { enabled: !fillWithBots });
+  });
+
   document.getElementById('btn-ready').addEventListener('click', () => {
     Net.send('ready');
     document.getElementById('btn-ready').disabled = true;
@@ -159,6 +198,10 @@
   const keyMap = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
   const currentInput = { up: false, down: false, left: false, right: false };
 
+  function isRaceActive() {
+    return document.getElementById('screen-race').classList.contains('active');
+  }
+
   window.addEventListener('keydown', e => {
     const key = keyMap[e.key];
     if (!key || currentInput[key]) return;
@@ -172,4 +215,24 @@
     currentInput[key] = false;
     Net.send('input', { input: currentInput });
   });
+
+  Gamepad.start(
+    input => {
+      Object.assign(currentInput, input);
+      if (isRaceActive()) Net.send('input', { input: currentInput });
+    },
+    id => {
+      const lobbyStatus = document.getElementById('gamepad-status');
+      const hudStatus = document.getElementById('hud-gamepad');
+      if (id) {
+        lobbyStatus.textContent = `🎮 Control conectado: ${id}`;
+        lobbyStatus.classList.add('connected');
+        hudStatus.textContent = '🎮';
+      } else {
+        lobbyStatus.textContent = '';
+        lobbyStatus.classList.remove('connected');
+        hudStatus.textContent = '';
+      }
+    }
+  );
 })();

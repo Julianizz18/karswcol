@@ -32,8 +32,9 @@
   <div class="panel">
     <h2>Cómo jugar</h2>
     <ul class="help-list">
-      <li>Flechas ↑ ↓ para acelerar / frenar, ← → para girar.</li>
+      <li>Flechas ↑ ↓ para acelerar / frenar, ← → para girar (o un control PS4/Xbox conectado: stick para girar, R2/X para acelerar, L2/Cuadrado para frenar).</li>
       <li>Completa 3 vueltas pasando por los puntos de control en orden.</li>
+      <li>Si faltan jugadores, actívalo en el lobby: la sala se completa con bots hasta tener una carrera decente, con la dificultad que elijas.</li>
       <li>Recoge tinto, arepa, aguapanela y otras delicias para un boost de velocidad.</li>
       <li>Elige la pista en el lobby: cada región de Colombia tiene su propio trazado.</li>
       <li>El servidor decide la posición real de cada kart: lo que ves ya fue validado por él.</li>
@@ -78,6 +79,19 @@
     <p class="section-label">Elige la pista</p>
     <div id="track-picker" class="track-picker"></div>
 
+    <div class="lobby-row">
+      <div class="lobby-col">
+        <p class="section-label">Dificultad de los bots</p>
+        <div id="difficulty-picker" class="pill-picker"></div>
+      </div>
+      <div class="lobby-col">
+        <p class="section-label">¿Faltan jugadores?</p>
+        <button id="btn-toggle-bots" class="btn-secondary" type="button">🤖 Completar con bots</button>
+      </div>
+    </div>
+
+    <p id="gamepad-status" class="muted gamepad-status"></p>
+
     <button id="btn-ready">Estoy listo</button>
     <div id="countdown" class="countdown"></div>
   </div>
@@ -89,6 +103,7 @@
       <span id="hud-track"></span>
       <span id="hud-lap">Vuelta 0/3</span>
       <span id="hud-weather"></span>
+      <span id="hud-gamepad" class="hud-gamepad"></span>
       <span id="hud-hint">↑↓ acelerar/frenar · ←→ girar</span>
     </div>
     <canvas id="race-canvas" width="900" height="560"></canvas>
@@ -109,6 +124,7 @@
 <script src="js/network.js"></script>
 <script src="js/router.js"></script>
 <script src="js/race.js"></script>
+<script src="js/gamepad.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
