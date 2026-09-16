@@ -19,17 +19,22 @@ const Race = (() => {
     if (rainActive) drawRain();
   }
 
+  function palette() {
+    return (track && track.palette) || { sky: ['#0d3b66', '#1c6e5f', '#1b6b3a'], grass: '#155c30', road: '#3a3f47', accent: '#FCD116' };
+  }
+
   function drawBackground() {
+    const pal = palette();
     const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    sky.addColorStop(0, '#0d3b66');
-    sky.addColorStop(0.35, '#1c6e5f');
-    sky.addColorStop(0.4, '#1b6b3a');
-    sky.addColorStop(1, '#155c30');
+    sky.addColorStop(0, pal.sky[0]);
+    sky.addColorStop(0.38, pal.sky[1]);
+    sky.addColorStop(0.42, pal.sky[2] || pal.grass);
+    sky.addColorStop(1, pal.grass);
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Silueta de montañas (referencia a los Andes) en la franja superior.
-    ctx.fillStyle = 'rgba(6, 20, 40, 0.45)';
+    // Silueta de relieve en la franja superior (montañas, selva o costa según la pista).
+    ctx.fillStyle = 'rgba(6, 20, 40, 0.4)';
     ctx.beginPath();
     ctx.moveTo(0, 90);
     ctx.lineTo(0, 40);
@@ -41,7 +46,6 @@ const Race = (() => {
     ctx.closePath();
     ctx.fill();
 
-    // Textura de césped: puntos suaves dispersos.
     ctx.fillStyle = 'rgba(255,255,255,0.04)';
     for (let i = 0; i < 140; i++) {
       const gx = (i * 97) % canvas.width;
@@ -51,38 +55,36 @@ const Race = (() => {
   }
 
   function drawTrack() {
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
-    const rx = 340;
-    const ry = 220;
+    if (!track) return;
+    const pal = palette();
+    const { x: cx, y: cy } = track.center;
+    const rx = track.rx;
+    const ry = track.ry;
+    const roadWidth = track.roadWidth;
 
-    // Sombra de la pista
     ctx.save();
     ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-    ctx.lineWidth = 100;
+    ctx.lineWidth = roadWidth + 14;
     ctx.beginPath();
     ctx.ellipse(cx, cy + 6, rx, ry, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
 
-    // Borde tipo sarda (rojo/blanco)
     ctx.strokeStyle = '#e8e8e8';
-    ctx.lineWidth = 104;
+    ctx.lineWidth = roadWidth + 14;
     ctx.setLineDash([22, 22]);
     ctx.beginPath();
     ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Asfalto
-    ctx.strokeStyle = '#3a3f47';
-    ctx.lineWidth = 90;
+    ctx.strokeStyle = pal.road;
+    ctx.lineWidth = roadWidth;
     ctx.beginPath();
     ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Línea central discontinua
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
     ctx.lineWidth = 3;
     ctx.setLineDash([16, 18]);
     ctx.beginPath();
@@ -90,25 +92,24 @@ const Race = (() => {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    if (track) {
-      drawStartBanner(track.checkpoints[0]);
-      track.checkpoints.forEach((cp, i) => {
-        if (i === 0) return; // la meta ya se dibuja como banner
-        ctx.beginPath();
-        ctx.arc(cp.x, cp.y, track.checkpointRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(`CP${i}`, cp.x, cp.y + 4);
-      });
-    }
+    drawStartBanner(track.checkpoints[0]);
+    track.checkpoints.forEach((cp, i) => {
+      if (i === 0) return;
+      ctx.beginPath();
+      ctx.arc(cp.x, cp.y, track.checkpointRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`CP${i}`, cp.x, cp.y + 4);
+    });
   }
 
   function drawStartBanner(cp) {
     if (!cp) return;
+    const pal = palette();
     const w = 96;
     const h = 14;
     ctx.save();
@@ -124,11 +125,11 @@ const Race = (() => {
     ctx.restore();
 
     ctx.beginPath();
-    ctx.arc(cp.x, cp.y, 55, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(252,209,22,0.7)';
+    ctx.arc(cp.x, cp.y, track.checkpointRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = pal.accent + 'b3';
     ctx.lineWidth = 3;
     ctx.stroke();
-    ctx.fillStyle = '#FCD116';
+    ctx.fillStyle = pal.accent;
     ctx.font = 'bold 11px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('META', cp.x, cp.y + 4);
@@ -138,20 +139,19 @@ const Race = (() => {
     if (!pu.available) return;
     ctx.save();
     ctx.translate(pu.x, pu.y);
-    const pulse = 1 + Math.sin(Date.now() / 180 + pu.x) * 0.08;
+    const pulse = 1 + Math.sin(Date.now() / 180 + pu.x) * 0.1;
     ctx.scale(pulse, pulse);
-    ctx.fillStyle = '#FCD116';
-    ctx.strokeStyle = '#003893';
-    ctx.lineWidth = 2;
+    ctx.fillStyle = 'rgba(13,21,38,0.85)';
     ctx.beginPath();
-    ctx.arc(0, 0, 12, 0, Math.PI * 2);
+    ctx.arc(0, 0, 14, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = '#FCD116';
+    ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.fillStyle = '#003893';
-    ctx.font = 'bold 14px sans-serif';
+    ctx.font = '16px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('!', 0, 1);
+    ctx.fillText(pu.emoji || '⭐', 0, 1);
     ctx.restore();
   }
 
@@ -194,12 +194,10 @@ const Race = (() => {
       ctx.shadowBlur = 18;
     }
 
-    // Llantas
     ctx.fillStyle = '#111';
     ctx.fillRect(-6, -9, 7, 4);
     ctx.fillRect(-6, 5, 7, 4);
 
-    // Carrocería
     ctx.fillStyle = color;
     ctx.strokeStyle = isSelf ? '#fff' : 'rgba(0,0,0,0.35)';
     ctx.lineWidth = isSelf ? 2.5 : 1.5;
@@ -213,7 +211,6 @@ const Race = (() => {
     ctx.fill();
     ctx.stroke();
 
-    // Casco del piloto
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
     ctx.beginPath();
     ctx.arc(-1, 0, 3.2, 0, Math.PI * 2);

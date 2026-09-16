@@ -17,6 +17,32 @@
     picker.appendChild(btn);
   });
 
+  function renderTrackPicker(tracks, selectedTrackId) {
+    const container = document.getElementById('track-picker');
+    const alreadyBuilt = container.children.length === tracks.length &&
+      [...container.children].every((card, i) => card.dataset.trackId === tracks[i].id);
+
+    if (!alreadyBuilt) {
+      container.innerHTML = '';
+      tracks.forEach(t => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'track-card';
+        card.dataset.trackId = t.id;
+        card.style.setProperty('--accent-color', t.accent || '#FCD116');
+        card.innerHTML = `<span class="track-swatch" style="background:${t.accent || '#FCD116'}"></span>` +
+          `<span class="track-name">${t.name}</span><span class="track-region">${t.region}</span>`;
+        card.title = t.description || '';
+        card.addEventListener('click', () => Net.send('select_track', { trackId: t.id }));
+        container.appendChild(card);
+      });
+    }
+
+    container.querySelectorAll('.track-card').forEach(card => {
+      card.classList.toggle('selected', card.dataset.trackId === selectedTrackId);
+    });
+  }
+
   function showToast(text) {
     const el = document.getElementById('toast');
     el.textContent = text;
@@ -47,6 +73,8 @@
           `<span class="${p.ready ? 'ready-tag' : ''}">${p.ready ? 'Listo' : 'Esperando...'}</span>`;
         list.appendChild(li);
       });
+
+      if (msg.tracks) renderTrackPicker(msg.tracks, msg.selectedTrackId);
     });
 
     Net.on('countdown', msg => {
@@ -55,6 +83,7 @@
 
     Net.on('race_start', msg => {
       Race.setTrack(msg.track);
+      document.getElementById('hud-track').textContent = `${msg.track.name}`;
       Router.show('race');
     });
 
@@ -72,11 +101,13 @@
 
     Net.on('event', msg => {
       if (msg.kind === 'pickup_claimed') {
-        showToast(`${msg.by} tomó un objeto ⚡`);
+        showToast(`${msg.by} tomó ${msg.itemName ? 'un ' + msg.itemName : 'un objeto'} ${msg.emoji || '⚡'}`);
       } else if (msg.kind === 'rain_start') {
         showToast('¡Empieza a llover! Pista resbalosa 🌧️');
       } else if (msg.kind === 'rain_end') {
         showToast('Para de llover ☀️');
+      } else if (msg.kind === 'lap_completed' && msg.playerId === selfId) {
+        showToast(msg.lap >= 3 ? '¡Última vuelta completada! 🏁' : `¡Vuelta ${msg.lap}/3 completada!`);
       }
     });
 
