@@ -16,6 +16,7 @@ implementación real en este repositorio.
 | Concurrency Resolver            | `server/src/concurrency-resolver/concurrencyResolver.js` | Resuelve reclamos simultáneos sobre objetos recogibles. |
 | Event Manager                   | `server/src/event-manager/eventManager.js`  | Genera y expira eventos dinámicos (lluvia). |
 | Ranking and Persistence Service | `server/src/ranking-persistence/rankingService.js` | Calcula el ranking final y expone el punto de extensión hacia PostgreSQL. |
+| Bot Driver                      | `server/src/bots/botDriver.js`              | Genera input (left/right/up/down) para completar la sala cuando faltan jugadores reales; el Game Engine lo aplica exactamente igual que un input humano. |
 | Orquestador de sala              | `server/src/raceRoom.js`                    | Conecta los componentes anteriores; no contiene reglas de juego propias. |
 
 Cada componente es un módulo independiente con una sola responsabilidad y
@@ -55,6 +56,28 @@ que no existe.
   borde. Esto es lo que garantiza que un jugador no pueda cortar por fuera
   del trazado y saltarse puntos de control — la causa real de que antes
   una vuelta pudiera no detectarse.
+
+## Bots y dificultad
+
+Cuando la sala activa "completar con bots" en el lobby, `RaceRoom.spawnBots`
+agrega jugadores artificiales hasta llegar a `BOT_FILL_TARGET` (6)
+participantes, sin quitar nunca jugadores reales de más. En cada tick, si el
+jugador es un bot, `computeBotInput` (Bot Driver) calcula hacia dónde girar
+usando el mismo dato que ya existe para la navegación humana: el siguiente
+checkpoint de la pista activa. La dificultad (`server/src/game-engine/difficulty.js`)
+es una configuración de sala, no por bot — la elige cualquier jugador en el
+lobby y aplica a todos los bots de esa carrera por igual.
+
+## Control físico (Gamepad API)
+
+El cliente (`client/js/gamepad.js`) traduce el estado de un control
+conectado (PS4, Xbox o cualquier mando compatible con el estándar W3C
+Gamepad) al mismo formato `{left, right, up, down}` que ya usan las
+flechas del teclado. Esto significa que ni el Connection Gateway ni el
+Game Engine necesitan saber si el input vino de un teclado o de un mando:
+para el backend es indistinguible. Requiere que el navegador soporte
+`navigator.getGamepads` (Chrome/Edge/Firefox) y que el usuario presione
+algún botón del control una vez para que el navegador lo detecte.
 
 ## Pendiente para el siguiente sprint
 

@@ -80,6 +80,12 @@ export function createGateway({ clientDir, room }) {
         case 'select_track':
           room.selectTrack(String(msg.trackId || ''));
           break;
+        case 'select_difficulty':
+          room.selectDifficulty(String(msg.difficulty || ''));
+          break;
+        case 'toggle_bots':
+          room.toggleBots(!!msg.enabled);
+          break;
         case 'input':
           room.setInput(id, msg.input);
           break;

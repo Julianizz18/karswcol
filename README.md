@@ -69,6 +69,15 @@ Implementado:
   lechona, tamal y buñuelo, cada uno con su propio ícono.
 - Aviso inmediato (toast) cada vez que el servidor confirma que un jugador
   cruzó la meta y completó una vuelta, además del contador en el HUD.
+- Bots que completan la sala (`🤖 Completar con bots` en el lobby) hasta
+  llegar a 6 participantes, sin quitar jugadores reales de más. La
+  dificultad (Fácil/Medio/Difícil) la elige cualquier jugador y aplica por
+  igual a todos los bots de esa carrera (`server/src/bots/botDriver.js`,
+  `server/src/game-engine/difficulty.js`).
+- Soporte de control físico (PS4, Xbox y compatibles) vía la Gamepad API
+  del navegador (`client/js/gamepad.js`): stick izquierdo para girar,
+  R2/Cross para acelerar, L2/Square para frenar. No requiere cambios en el
+  servidor porque el input llega en el mismo formato que el del teclado.
 
 Pendiente (siguiente sprint, según release plan):
 - Conectar `RankingService` a PostgreSQL y usar Redis como lock distribuido
@@ -88,6 +97,7 @@ server/
     concurrency-resolver/     Concurrency Resolver
     event-manager/             Event Manager
     ranking-persistence/      Ranking and Persistence Service
+    bots/                       Bot Driver
     raceRoom.js                 Orquestador de sala
   Dockerfile
 client/                        Cliente web estático (HTML/CSS/JS, sin build step)

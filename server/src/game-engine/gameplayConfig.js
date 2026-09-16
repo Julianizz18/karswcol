@@ -18,6 +18,13 @@ export const BOOST_MULTIPLIER = 1.7;
 export const RAIN_DURATION_MS = 10000;
 export const RAIN_SPEED_FACTOR = 0.6;
 
+// Cuántos participantes debe tener la carrera como mínimo cuando se activa
+// "completar con bots" (se rellena con bots hasta llegar a este número,
+// nunca se quitan jugadores reales de más).
+export const BOT_FILL_TARGET = 6;
+
+export const BOT_COLORS = ['#8E44AD', '#E67E22', '#2ECC71', '#EC407A', '#00A99D', '#95A5A6'];
+
 // Objetos recogibles con identidad colombiana (HU03). El efecto de juego es
 // el mismo para todos (boost de velocidad); lo que cambia es la
 // presentación, para que recoger uno se sienta como parte del tema del
