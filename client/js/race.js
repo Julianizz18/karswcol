@@ -16,6 +16,12 @@ const SPECIAL_SPRITES = {
 const Race = (() => {
   const canvas = document.getElementById('race-canvas');
   const ctx = canvas.getContext('2d');
+  // El servidor trabaja en un mundo de 900x560 (ver trackCatalog.js); el
+  // canvas se declara más grande en el HTML para verse mejor en pantalla,
+  // y aquí se escala el dibujado para llenarlo sin tocar ninguna
+  // coordenada de física ni de red.
+  const WORLD_WIDTH = 900;
+  const WORLD_HEIGHT = 560;
   let track = null;
 
   function setTrack(t) {
@@ -23,7 +29,11 @@ const Race = (() => {
   }
 
   function render(players, selfId, pickups = [], rainActive = false) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const scale = Math.min(canvas.width / WORLD_WIDTH, canvas.height / WORLD_HEIGHT);
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+
     drawBackground();
     drawTrack();
     pickups.forEach(drawPickup);
@@ -37,31 +47,31 @@ const Race = (() => {
 
   function drawBackground() {
     const pal = palette();
-    const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    const sky = ctx.createLinearGradient(0, 0, 0, WORLD_HEIGHT);
     sky.addColorStop(0, pal.sky[0]);
     sky.addColorStop(0.38, pal.sky[1]);
     sky.addColorStop(0.42, pal.sky[2] || pal.grass);
     sky.addColorStop(1, pal.grass);
     ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
     // Silueta de relieve en la franja superior (montañas, selva o costa según la pista).
     ctx.fillStyle = 'rgba(6, 20, 40, 0.4)';
     ctx.beginPath();
     ctx.moveTo(0, 90);
     ctx.lineTo(0, 40);
-    for (let x = 0; x <= canvas.width; x += 60) {
+    for (let x = 0; x <= WORLD_WIDTH; x += 60) {
       const y = 20 + Math.abs(Math.sin(x * 0.008)) * 40 + Math.cos(x * 0.02) * 10;
       ctx.lineTo(x, y);
     }
-    ctx.lineTo(canvas.width, 90);
+    ctx.lineTo(WORLD_WIDTH, 90);
     ctx.closePath();
     ctx.fill();
 
     ctx.fillStyle = 'rgba(255,255,255,0.04)';
     for (let i = 0; i < 140; i++) {
-      const gx = (i * 97) % canvas.width;
-      const gy = 90 + ((i * 53) % (canvas.height - 100));
+      const gx = (i * 97) % WORLD_WIDTH;
+      const gy = 90 + ((i * 53) % (WORLD_HEIGHT - 100));
       ctx.fillRect(gx, gy, 2, 2);
     }
   }
@@ -171,8 +181,8 @@ const Race = (() => {
   function drawRain() {
     if (!rainDrops) {
       rainDrops = Array.from({ length: 90 }, () => ({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
+        x: Math.random() * WORLD_WIDTH,
+        y: Math.random() * WORLD_HEIGHT,
         len: 8 + Math.random() * 10,
         speed: 6 + Math.random() * 6
       }));
@@ -187,13 +197,13 @@ const Race = (() => {
       ctx.stroke();
       d.y += d.speed;
       d.x -= 1.2;
-      if (d.y > canvas.height) {
+      if (d.y > WORLD_HEIGHT) {
         d.y = -10;
-        d.x = Math.random() * canvas.width;
+        d.x = Math.random() * WORLD_WIDTH;
       }
     });
     ctx.fillStyle = 'rgba(20,60,90,0.12)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     ctx.restore();
   }
 
@@ -211,12 +221,14 @@ const Race = (() => {
     if (special && special.isReady()) {
       const w = 56;
       const h = w * (special.img.naturalHeight / special.img.naturalWidth);
-      ctx.drawImage(special.img, -w / 2, -h / 2, w, h);
       if (isSelf) {
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(-w / 2, -h / 2, w, h);
+        ctx.save();
+        ctx.shadowColor = '#fff';
+        ctx.shadowBlur = 10;
+        ctx.drawImage(special.img, -w / 2, -h / 2, w, h);
+        ctx.restore();
       }
+      ctx.drawImage(special.img, -w / 2, -h / 2, w, h);
     } else {
       ctx.fillStyle = '#111';
       ctx.fillRect(-6, -9, 7, 4);
