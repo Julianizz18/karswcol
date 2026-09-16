@@ -1,0 +1,40 @@
+# Vista de infraestructura y despliegue (sección 4.2 de la propuesta).
+# Alcance actual del curso: todo corre en una sola máquina/VM con Docker
+# Compose. Redis y PostgreSQL ya están orquestados aquí como parte del
+# entorno, pero el Game Engine y el Ranking Service todavía no los consumen
+# (ver TODO en server/src/ranking-persistence/rankingService.js) — es el
+# trabajo planeado para el siguiente sprint del release plan.
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgres://karswcol:karswcol@postgres:5432/karswcol
+    depends_on:
+      - redis
+      - postgres
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: karswcol
+      POSTGRES_PASSWORD: karswcol
+      POSTGRES_DB: karswcol
+    ports:
+      - "5432:5432"
+    volumes:
+      - karswcol_pgdata:/var/lib/postgresql/data
+
+volumes:
+  karswcol_pgdata:
