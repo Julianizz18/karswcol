@@ -77,6 +77,9 @@ export function createGateway({ clientDir, room }) {
         case 'ready':
           room.setReady(id);
           break;
+        case 'select_track':
+          room.selectTrack(String(msg.trackId || ''));
+          break;
         case 'input':
           room.setInput(id, msg.input);
           break;

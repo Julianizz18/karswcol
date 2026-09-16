@@ -1,4 +1,4 @@
-import { TRACK } from '../game-engine/track.js';
+import { RAIN_DURATION_MS, RAIN_SPEED_FACTOR } from '../game-engine/gameplayConfig.js';
 
 // Event Manager (HU04, componente "Event Manager" de la sección 4.1).
 // Genera y aplica eventos dinámicos durante la carrera. Por ahora solo
@@ -23,8 +23,8 @@ export class EventManager {
     if (this.rainTriggered || lap < 1) return null;
     this.rainTriggered = true;
     this.rainActive = true;
-    this.rainEndsAt = now + TRACK.rainDurationMs;
-    return { type: 'rain_start', durationMs: TRACK.rainDurationMs };
+    this.rainEndsAt = now + RAIN_DURATION_MS;
+    return { type: 'rain_start', durationMs: RAIN_DURATION_MS };
   }
 
   /** Se invoca una vez por tick para expirar eventos activos. */
@@ -37,6 +37,6 @@ export class EventManager {
   }
 
   speedFactor() {
-    return this.rainActive ? TRACK.rainSpeedFactor : 1;
+    return this.rainActive ? RAIN_SPEED_FACTOR : 1;
   }
 }

@@ -1,20 +1,21 @@
-import { TRACK } from './track.js';
+import {
+  TURN_SPEED, ACCEL, FRICTION, MAX_SPEED, WALL_BOUNCE_DAMPING,
+  TOTAL_LAPS, BOOST_DURATION_MS, BOOST_MULTIPLIER
+} from './gameplayConfig.js';
 
 // Game Engine — server-authoritative (HU02, componente "Game Engine" de la
 // vista de aplicación, sección 4.1). Es la única fuente de verdad del estado
-// de carrera: posición, colisiones con el borde de pista y vueltas. Ni el
+// de carrera: posición, colisión con el borde de la pista y vueltas. Recibe
+// la pista activa como parámetro en cada llamada en vez de tener una fija,
+// para poder soportar varios circuitos con la misma física. Ni el
 // Concurrency Resolver ni el Event Manager tocan posición directamente; solo
 // leen/afectan parámetros (velocidad máxima efectiva) que el motor aplica.
 
-export const TICK_MS = 50; // ciclo de actualización fijo del servidor (sección 5.1)
-const TURN_SPEED = 0.06;
-const ACCEL = 0.18;
-const FRICTION = 0.965;
-export const MAX_SPEED = 5.2;
+export { TICK_MS } from './gameplayConfig.js';
 
 export class GameEngine {
-  createPlayerState(id, name, color, startSlot) {
-    const start = TRACK.startPositions[startSlot % TRACK.startPositions.length];
+  createPlayerState(id, name, color, startSlot, track) {
+    const start = track.startPositions[startSlot % track.startPositions.length];
     return {
       id,
       name,
@@ -32,6 +33,13 @@ export class GameEngine {
     };
   }
 
+  placeOnGrid(p, startSlot, track) {
+    const start = track.startPositions[startSlot % track.startPositions.length];
+    p.x = start.x;
+    p.y = start.y;
+    p.angle = start.angle;
+  }
+
   resetPlayerState(p) {
     p.lap = 0;
     p.nextCheckpoint = 0;
@@ -46,11 +54,12 @@ export class GameEngine {
   }
 
   /**
-   * Avanza un tick de física para un jugador y evalúa si cruzó su próximo
-   * punto de control. Devuelve un evento de "lap_completed" cuando corresponde,
-   * para que Event Manager y Ranking Service reaccionen sin acoplarse a la física.
+   * Avanza un tick de física para un jugador, aplica la colisión con el
+   * borde de la carretera y evalúa si cruzó su próximo punto de control.
+   * Devuelve un evento "lap_completed" cuando corresponde, para que Event
+   * Manager y Ranking Service reaccionen sin acoplarse a la física.
    */
-  step(p, now, raceStartedAt, effectiveMaxSpeedFactor) {
+  step(p, now, raceStartedAt, effectiveMaxSpeedFactor, track) {
     if (p.finished) return null;
 
     if (p.input.left) p.angle -= TURN_SPEED;
@@ -61,37 +70,66 @@ export class GameEngine {
 
     const boosted = p.boostUntil > now;
     let effectiveMax = MAX_SPEED * effectiveMaxSpeedFactor;
-    if (boosted) effectiveMax *= TRACK.boostMultiplier;
+    if (boosted) effectiveMax *= BOOST_MULTIPLIER;
 
     p.speed = Math.max(-effectiveMax / 2, Math.min(effectiveMax, p.speed));
     p.x += Math.cos(p.angle) * p.speed;
     p.y += Math.sin(p.angle) * p.speed;
-    p.x = Math.max(20, Math.min(TRACK.width - 20, p.x));
-    p.y = Math.max(20, Math.min(TRACK.height - 20, p.y));
 
-    return this.evaluateCheckpoint(p, now, raceStartedAt);
+    this.confineToRoad(p, track);
+
+    return this.evaluateCheckpoint(p, now, raceStartedAt, track);
   }
 
-  evaluateCheckpoint(p, now, raceStartedAt) {
-    const cp = TRACK.checkpoints[p.nextCheckpoint];
+  /**
+   * Mantiene al kart dentro del anillo de la carretera (colisión con el
+   * borde). Se trabaja en coordenadas normalizadas de la elipse: en ese
+   * espacio la pista es siempre un anillo centrado en radio 1, así que
+   * proyectar el punto de vuelta al rango permitido funciona igual sin
+   * importar la forma (rx/ry) de cada circuito.
+   */
+  confineToRoad(p, track) {
+    const { center, rx, ry, roadWidth } = track;
+    const dx = p.x - center.x;
+    const dy = p.y - center.y;
+    const nx = dx / rx;
+    const ny = dy / ry;
+    const t = Math.sqrt(nx * nx + ny * ny) || 0.0001;
+
+    const avgRadius = (rx + ry) / 2;
+    const halfBand = (roadWidth / 2) / avgRadius;
+    const tMin = 1 - halfBand;
+    const tMax = 1 + halfBand;
+
+    if (t < tMin || t > tMax) {
+      const clamped = Math.max(tMin, Math.min(tMax, t));
+      const scale = clamped / t;
+      p.x = center.x + dx * scale;
+      p.y = center.y + dy * scale;
+      p.speed *= WALL_BOUNCE_DAMPING;
+    }
+  }
+
+  evaluateCheckpoint(p, now, raceStartedAt, track) {
+    const cp = track.checkpoints[p.nextCheckpoint];
     const dx = p.x - cp.x;
     const dy = p.y - cp.y;
-    if (Math.sqrt(dx * dx + dy * dy) > TRACK.checkpointRadius) return null;
+    if (Math.sqrt(dx * dx + dy * dy) > track.checkpointRadius) return null;
 
-    const wasLastCheckpoint = p.nextCheckpoint === TRACK.checkpoints.length - 1;
-    p.nextCheckpoint = (p.nextCheckpoint + 1) % TRACK.checkpoints.length;
+    const wasLastCheckpoint = p.nextCheckpoint === track.checkpoints.length - 1;
+    p.nextCheckpoint = (p.nextCheckpoint + 1) % track.checkpoints.length;
     if (!wasLastCheckpoint) return null;
 
     p.lap += 1;
-    if (p.lap >= TRACK.totalLaps) {
+    if (p.lap >= TOTAL_LAPS) {
       p.finished = true;
       p.finishTime = now - raceStartedAt;
     }
-    return { type: 'lap_completed', playerId: p.id, lap: p.lap, finished: p.finished };
+    return { type: 'lap_completed', playerId: p.id, name: p.name, lap: p.lap, finished: p.finished };
   }
 
   applyBoost(p, now) {
-    p.boostUntil = now + TRACK.boostDurationMs;
+    p.boostUntil = now + BOOST_DURATION_MS;
   }
 
   isBoosted(p, now) {

@@ -11,7 +11,8 @@ implementación real en este repositorio.
 | Game Client                    | `client/`                                   | Renderiza el estado recibido y captura input. No decide reglas de juego. |
 | Connection Gateway              | `server/src/gateway/gateway.js`             | Único punto de entrada de red: sirve el cliente y enruta mensajes WebSocket. |
 | Matchmaking Service             | `server/src/matchmaking/matchmakingService.js` | Agrupa jugadores en una sala y decide cuándo están listos para iniciar. |
-| Game Engine                     | `server/src/game-engine/gameEngine.js` + `track.js` | Única fuente de verdad de posición, colisiones con el borde y vueltas. |
+| Game Engine                     | `server/src/game-engine/gameEngine.js` + `gameplayConfig.js` | Única fuente de verdad de posición, colisiones con el borde y vueltas. |
+| Catálogo de pistas               | `server/src/game-engine/trackCatalog.js`    | Geometría e identidad visual de las 5 pistas (una por región); el Game Engine recibe la pista activa como parámetro, no la conoce de antemano. |
 | Concurrency Resolver            | `server/src/concurrency-resolver/concurrencyResolver.js` | Resuelve reclamos simultáneos sobre objetos recogibles. |
 | Event Manager                   | `server/src/event-manager/eventManager.js`  | Genera y expira eventos dinámicos (lluvia). |
 | Ranking and Persistence Service | `server/src/ranking-persistence/rankingService.js` | Calcula el ranking final y expone el punto de extensión hacia PostgreSQL. |
@@ -48,6 +49,12 @@ que no existe.
   cliente quedan resueltos sin condición de carrera real en el proceso.
 - **Difusión por WebSocket cada tick**, no por solicitud del cliente, para
   que ningún jugador tome decisiones sobre un estado desactualizado.
+- **Colisión con el borde de pista** (`GameEngine.confineToRoad`): cada
+  pista es un anillo elíptico; el motor proyecta la posición del kart de
+  vuelta al anillo cuando se sale, y le quita velocidad al golpear el
+  borde. Esto es lo que garantiza que un jugador no pueda cortar por fuera
+  del trazado y saltarse puntos de control — la causa real de que antes
+  una vuelta pudiera no detectarse.
 
 ## Pendiente para el siguiente sprint
 

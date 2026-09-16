@@ -1,4 +1,5 @@
-import { TRACK } from './game-engine/track.js';
+import { TRACKS, getTrackById } from './game-engine/trackCatalog.js';
+import { TOTAL_LAPS } from './game-engine/gameplayConfig.js';
 import { GameEngine, TICK_MS } from './game-engine/gameEngine.js';
 import { MatchmakingService } from './matchmaking/matchmakingService.js';
 import { ConcurrencyResolver } from './concurrency-resolver/concurrencyResolver.js';
@@ -23,13 +24,18 @@ export class RaceRoom {
     this.tickHandle = null;
     this.raceStartedAt = null;
     this.playerStates = new Map(); // id -> estado físico (Game Engine)
+    this.trackId = TRACKS[0].id;
+  }
+
+  get track() {
+    return getTrackById(this.trackId);
   }
 
   addPlayer(id, name, color) {
     if (!this.matchmaking.hasCapacity()) return false;
     this.matchmaking.join(id, name, color);
     const slot = this.matchmaking.list().length - 1;
-    this.playerStates.set(id, this.gameEngine.createPlayerState(id, name, color, slot));
+    this.playerStates.set(id, this.gameEngine.createPlayerState(id, name, color, slot, this.track));
     this.sendLobbyUpdate();
     return true;
   }
@@ -50,6 +56,18 @@ export class RaceRoom {
     if (p) this.gameEngine.setInput(p, input);
   }
 
+  selectTrack(trackId) {
+    if (this.state !== 'lobby') return;
+    if (!TRACKS.some(t => t.id === trackId)) return;
+    this.trackId = trackId;
+    let slot = 0;
+    for (const p of this.playerStates.values()) {
+      this.gameEngine.placeOnGrid(p, slot, this.track);
+      slot += 1;
+    }
+    this.sendLobbyUpdate();
+  }
+
   setReady(id) {
     if (this.state !== 'lobby') return;
     this.matchmaking.setReady(id);
@@ -60,7 +78,9 @@ export class RaceRoom {
   sendLobbyUpdate() {
     this.broadcast({
       type: 'lobby_update',
-      players: this.matchmaking.list().map(p => ({ id: p.id, name: p.name, color: p.color, ready: p.ready }))
+      players: this.matchmaking.list().map(p => ({ id: p.id, name: p.name, color: p.color, ready: p.ready })),
+      tracks: TRACKS.map(t => ({ id: t.id, name: t.name, region: t.region, description: t.description, accent: t.palette.accent })),
+      selectedTrackId: this.trackId
     });
   }
 
@@ -82,26 +102,37 @@ export class RaceRoom {
   startRace() {
     this.state = 'racing';
     this.raceStartedAt = Date.now();
-    this.concurrencyResolver.reset();
+    this.concurrencyResolver.reset(this.track);
     this.eventManager.reset();
-    this.broadcast({ type: 'race_start', totalLaps: TRACK.totalLaps, track: TRACK });
+    this.broadcast({ type: 'race_start', totalLaps: TOTAL_LAPS, track: this.track });
     this.tickHandle = setInterval(() => this.tick(), TICK_MS);
   }
 
   tick() {
     const now = Date.now();
     const speedFactor = this.eventManager.speedFactor();
+    const track = this.track;
 
     for (const p of this.playerStates.values()) {
-      const lapEvent = this.gameEngine.step(p, now, this.raceStartedAt, speedFactor);
+      const lapEvent = this.gameEngine.step(p, now, this.raceStartedAt, speedFactor, track);
       if (lapEvent) {
+        this.broadcast({ type: 'event', kind: 'lap_completed', playerId: lapEvent.playerId, name: lapEvent.name, lap: lapEvent.lap });
         const rainEvent = this.eventManager.onLapCompleted(lapEvent.lap, now);
         if (rainEvent) this.broadcast({ type: 'event', kind: rainEvent.type, durationMs: rainEvent.durationMs });
       }
       // Mismo orden de iteración en cada tick: la resolución de conflictos
       // sobre objetos compartidos queda determinada por el orden de llegada.
       const claimEvent = this.concurrencyResolver.tryClaim(p, this.gameEngine, now);
-      if (claimEvent) this.broadcast({ type: 'event', kind: claimEvent.type, pickupId: claimEvent.pickupId, by: claimEvent.by });
+      if (claimEvent) {
+        this.broadcast({
+          type: 'event',
+          kind: claimEvent.type,
+          pickupId: claimEvent.pickupId,
+          by: claimEvent.by,
+          itemName: claimEvent.itemName,
+          emoji: claimEvent.emoji
+        });
+      }
     }
 
     const expiredEvent = this.eventManager.tick(now);
@@ -135,7 +166,12 @@ export class RaceRoom {
     this.countdownValue = 0;
     this.raceStartedAt = null;
     this.matchmaking.resetReadiness();
-    for (const p of this.playerStates.values()) this.gameEngine.resetPlayerState(p);
+    let slot = 0;
+    for (const p of this.playerStates.values()) {
+      this.gameEngine.resetPlayerState(p);
+      this.gameEngine.placeOnGrid(p, slot, this.track);
+      slot += 1;
+    }
     this.sendLobbyUpdate();
   }
 }

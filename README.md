@@ -51,17 +51,31 @@ Implementado:
   Persistence Service) — ver `ARCHITECTURE.md`.
 - `docker-compose.yml` con Redis y PostgreSQL orquestados (aún no
   consumidos por el Ranking Service, ver pendientes).
-- Identidad visual: tipografía propia (Bungee/Rubik), pista con asfalto,
-  sardas, meta a cuadros y silueta de montañas, karts con detalle de
-  llantas y casco, velocímetro y selector de color de kart.
+- Identidad visual: tipografía propia (Bungee/Rubik), imagen de portada en
+  el menú, pista con asfalto, sardas, meta a cuadros y silueta de relieve,
+  karts con detalle de llantas y casco, velocímetro y selector de color.
+- 5 pistas jugables, cada una inspirada en una región de Colombia, elegibles
+  desde el lobby (`server/src/game-engine/trackCatalog.js`): Costa de
+  Cartagena (Caribe), Altiplano de Bogotá (Andina), Eje Cafetero (Andina —
+  zona cafetera), Llanos Orientales (Orinoquía) y Selva Amazónica
+  (Amazonía). Cada una varía tamaño, forma, ancho de carretera y número de
+  puntos de control, y tiene su propia paleta de colores.
+- Colisión real del kart contra el borde de la carretera (antes el único
+  límite físico era el canvas completo, así que un kart podía cortar por el
+  césped y nunca volver a pasar por los puntos de control — por eso a veces
+  "no se detectaba" la vuelta). Ahora el motor confina al kart dentro del
+  anillo de la pista y le quita velocidad al rozar el borde.
+- Objetos recogibles con identidad colombiana: tinto, arepa, aguapanela,
+  lechona, tamal y buñuelo, cada uno con su propio ícono.
+- Aviso inmediato (toast) cada vez que el servidor confirma que un jugador
+  cruzó la meta y completó una vuelta, además del contador en el HUD.
 
 Pendiente (siguiente sprint, según release plan):
 - Conectar `RankingService` a PostgreSQL y usar Redis como lock distribuido
   si el backend escala a varios procesos (HU05, HU06).
-- Colisión real del kart con el borde de la pista (hoy el límite físico es
-  el canvas completo, no el trazado visual de la carretera).
 - Reconexión con token de sesión (HU06).
-- Matchmaking real por salas (hoy hay una sola sala compartida).
+- Matchmaking real por salas (hoy hay una sola sala compartida, con una
+  pista seleccionable por todos antes de iniciar).
 
 ## Estructura
 
