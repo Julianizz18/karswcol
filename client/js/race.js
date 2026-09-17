@@ -1,17 +1,35 @@
 // Dibuja el estado que llega del servidor cada tick. No calcula física propia.
-const KART_COLORS = ['#FCD116', '#CE1126', '#00A99D', '#8E44AD', '#E67E22', '#2ECC71', '#3498DB', '#EC407A'];
+const KART_COLORS = ['#CE1126', '#FCD116', '#95A5A6', '#ECF0F1', '#2ECC71'];
 
-// El color rojo de la flota usa un sprite propio (bus de TransMilenio) en
-// vez del kart dibujado en canvas, como prueba de vehículo personalizado.
-const SPECIAL_SPRITES = {
-  '#CE1126': (() => {
-    const img = new Image();
-    let ready = false;
-    img.onload = () => { ready = true; };
-    img.src = 'img/kart-transmilenio.png';
-    return { img, isReady: () => ready };
-  })()
+// Cada color de la flota tiene su propio vehículo (sprite) en vez del kart
+// dibujado en canvas, como prueba de identidad visual personalizada.
+function loadSprite(src) {
+  const img = new Image();
+  let ready = false;
+  img.onload = () => { ready = true; };
+  img.src = src;
+  return { img, isReady: () => ready };
+}
+
+const KART_VEHICLE_NAMES = {
+  '#CE1126': 'Bus de TransMilenio',
+  '#FCD116': 'Taxi',
+  '#95A5A6': 'Burro',
+  '#ECF0F1': 'Avión de Avianca',
+  '#2ECC71': 'Metro de Medellín'
 };
+
+const KART_VEHICLE_IMAGES = {
+  '#CE1126': 'img/kart-transmilenio.png',
+  '#FCD116': 'img/kart-taxi.png',
+  '#95A5A6': 'img/kart-burro.png',
+  '#ECF0F1': 'img/kart-avion-avianca.png',
+  '#2ECC71': 'img/kart-metro-medellin.png'
+};
+
+const SPECIAL_SPRITES = Object.fromEntries(
+  Object.entries(KART_VEHICLE_IMAGES).map(([color, src]) => [color, loadSprite(src)])
+);
 
 const Race = (() => {
   const canvas = document.getElementById('race-canvas');

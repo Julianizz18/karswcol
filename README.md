@@ -53,12 +53,17 @@ Implementado:
   consumidos por el Ranking Service, ver pendientes).
 - Identidad visual: tipografía propia (Bungee/Rubik), imagen de portada en
   el menú, pista con asfalto, sardas, meta a cuadros y silueta de relieve,
-  karts con detalle de llantas y casco, velocímetro y selector de color. El
-  kart de color rojo usa un sprite propio (`client/img/kart-transmilenio.png`)
-  en vez del dibujo vectorial — es una prueba de vehículo personalizado; al
-  ser una foto de perfil y no una vista cenital, se ve un poco extraño al
-  girar cerrado (queda como pendiente conseguir una vista desde arriba si
-  se quiere ver perfecto en curva).
+  karts con detalle de llantas y casco, velocímetro y selector de color.
+  5 colores de la flota usan un sprite propio en vez del dibujo vectorial,
+  como prueba de vehículos personalizados: rojo → bus de TransMilenio
+  (`client/img/kart-transmilenio.png`), verde azulado → burro
+  (`client/img/kart-burro.png`), morado → taxi
+  (`client/img/kart-taxi.png`), naranja → metro de Medellín
+  (`client/img/kart-metro-medellin.png`) y verde → avión de Avianca
+  (`client/img/kart-avion-avianca.png`). Al ser fotos/ilustraciones y no
+  todas una vista cenital pura, algunos se ven un poco extraños al girar
+  cerrado (queda como pendiente conseguir vistas desde arriba si se quiere
+  ver perfecto en curva).
 - 5 pistas jugables, cada una inspirada en una región de Colombia, elegibles
   desde el lobby (`server/src/game-engine/trackCatalog.js`): Costa de
   Cartagena (Caribe), Altiplano de Bogotá (Andina), Eje Cafetero (Andina —

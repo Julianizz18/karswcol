@@ -59,11 +59,22 @@
 </div>
 
 <div id="screen-join" class="screen">
-  <div class="panel">
-    <h2>Ingresa tu nombre</h2>
+  <div class="stage-panel">
+    <h2 class="stage-title">Ingresa tu nombre</h2>
     <input id="name-input" maxlength="20" placeholder="Tu nombre de piloto" />
-    <p class="muted" style="margin-bottom:6px;">Elige el color de tu kart</p>
-    <div id="color-picker" class="color-picker"></div>
+
+    <p class="stage-caption">Elige tu vehículo</p>
+    <div class="showcase" id="vehicle-showcase">
+      <button class="showcase-arrow" id="vehicle-prev" type="button" aria-label="Vehículo anterior">‹</button>
+      <div class="showcase-frame">
+        <div class="showcase-glow"></div>
+        <img id="vehicle-image" class="showcase-image" alt="" />
+      </div>
+      <button class="showcase-arrow" id="vehicle-next" type="button" aria-label="Vehículo siguiente">›</button>
+    </div>
+    <h3 id="vehicle-name" class="showcase-name"></h3>
+    <div class="showcase-dots" id="vehicle-dots"></div>
+
     <button id="btn-enter-lobby">Entrar al lobby</button>
     <button data-nav="menu" class="btn-back">Volver</button>
     <p id="join-error" class="error"></p>
@@ -71,29 +82,40 @@
 </div>
 
 <div id="screen-lobby" class="screen">
-  <div class="panel wide">
-    <h2>Lobby</h2>
-    <p class="muted">Esperando pilotos (mín. 1 para pruebas, ideal 4-8)</p>
-    <ul id="lobby-players" class="player-list"></ul>
+  <div class="stage-panel stage-panel-wide">
+    <h2 class="stage-title">Lobby</h2>
+    <div class="stage-grid">
+      <div class="stage-main">
+        <p class="stage-caption">Elige la pista</p>
+        <div class="showcase" id="track-showcase">
+          <button class="showcase-arrow" id="track-prev" type="button" aria-label="Pista anterior">‹</button>
+          <div class="showcase-frame">
+            <div class="showcase-glow"></div>
+            <img id="track-image" class="showcase-image" alt="" />
+          </div>
+          <button class="showcase-arrow" id="track-next" type="button" aria-label="Pista siguiente">›</button>
+        </div>
+        <h3 id="track-name" class="showcase-name"></h3>
+        <p id="track-region" class="showcase-subtitle"></p>
+        <div id="track-picker" class="track-thumbs"></div>
+      </div>
 
-    <p class="section-label">Elige la pista</p>
-    <div id="track-picker" class="track-picker"></div>
+      <div class="stage-side">
+        <p class="muted">Esperando pilotos (mín. 1 para pruebas, ideal 4-8)</p>
+        <ul id="lobby-players" class="player-list"></ul>
 
-    <div class="lobby-row">
-      <div class="lobby-col">
         <p class="section-label">Dificultad de los bots</p>
         <div id="difficulty-picker" class="pill-picker"></div>
-      </div>
-      <div class="lobby-col">
+
         <p class="section-label">¿Faltan jugadores?</p>
         <button id="btn-toggle-bots" class="btn-secondary" type="button">🤖 Completar con bots</button>
+
+        <p id="gamepad-status" class="muted gamepad-status"></p>
+
+        <button id="btn-ready">Estoy listo</button>
+        <div id="countdown" class="countdown"></div>
       </div>
     </div>
-
-    <p id="gamepad-status" class="muted gamepad-status"></p>
-
-    <button id="btn-ready">Estoy listo</button>
-    <div id="countdown" class="countdown"></div>
   </div>
 </div>
 

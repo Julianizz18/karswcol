@@ -2,46 +2,100 @@
   let selfId = null;
   let connected = false;
   let selectedColor = KART_COLORS[0];
+  let vehicleIndex = 0;
 
-  const picker = document.getElementById('color-picker');
-  KART_COLORS.forEach((c, i) => {
-    const btn = document.createElement('button');
-    btn.className = 'swatch-btn' + (i === 0 ? ' selected' : '');
-    btn.style.background = c;
-    btn.type = 'button';
-    btn.addEventListener('click', () => {
-      selectedColor = c;
-      picker.querySelectorAll('.swatch-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
+  const vehicleImage = document.getElementById('vehicle-image');
+  const vehicleName = document.getElementById('vehicle-name');
+  const vehicleDots = document.getElementById('vehicle-dots');
+
+  function renderVehicleShowcase() {
+    selectedColor = KART_COLORS[vehicleIndex];
+    vehicleImage.src = KART_VEHICLE_IMAGES[selectedColor] || '';
+    vehicleImage.alt = KART_VEHICLE_NAMES[selectedColor] || '';
+    vehicleName.textContent = KART_VEHICLE_NAMES[selectedColor] || '';
+    vehicleDots.querySelectorAll('button').forEach((dot, i) => {
+      dot.classList.toggle('selected', i === vehicleIndex);
     });
-    picker.appendChild(btn);
+  }
+
+  KART_COLORS.forEach((c, i) => {
+    const dot = document.createElement('button');
+    dot.type = 'button';
+    dot.title = KART_VEHICLE_NAMES[c] || '';
+    dot.addEventListener('click', () => { vehicleIndex = i; renderVehicleShowcase(); });
+    vehicleDots.appendChild(dot);
   });
 
+  document.getElementById('vehicle-prev').addEventListener('click', () => {
+    vehicleIndex = (vehicleIndex - 1 + KART_COLORS.length) % KART_COLORS.length;
+    renderVehicleShowcase();
+  });
+  document.getElementById('vehicle-next').addEventListener('click', () => {
+    vehicleIndex = (vehicleIndex + 1) % KART_COLORS.length;
+    renderVehicleShowcase();
+  });
+
+  renderVehicleShowcase();
+
+  const TRACK_IMAGES = {
+    caribe: 'img/track-caribe.png',
+    andes: 'img/track-andes.png',
+    cafetero: 'img/track-cafetero.png',
+    llanos: 'img/track-llanos.png',
+    amazonia: 'img/track-amazonia.png'
+  };
+
+  const trackImage = document.getElementById('track-image');
+  const trackName = document.getElementById('track-name');
+  const trackRegion = document.getElementById('track-region');
+  let knownTracks = [];
+
   function renderTrackPicker(tracks, selectedTrackId) {
+    knownTracks = tracks;
     const container = document.getElementById('track-picker');
     const alreadyBuilt = container.children.length === tracks.length &&
-      [...container.children].every((card, i) => card.dataset.trackId === tracks[i].id);
+      [...container.children].every((thumb, i) => thumb.dataset.trackId === tracks[i].id);
 
     if (!alreadyBuilt) {
       container.innerHTML = '';
       tracks.forEach(t => {
-        const card = document.createElement('button');
-        card.type = 'button';
-        card.className = 'track-card';
-        card.dataset.trackId = t.id;
-        card.style.setProperty('--accent-color', t.accent || '#FCD116');
-        card.innerHTML = `<span class="track-swatch" style="background:${t.accent || '#FCD116'}"></span>` +
-          `<span class="track-name">${t.name}</span><span class="track-region">${t.region}</span>`;
-        card.title = t.description || '';
-        card.addEventListener('click', () => Net.send('select_track', { trackId: t.id }));
-        container.appendChild(card);
+        const thumb = document.createElement('button');
+        thumb.type = 'button';
+        thumb.className = 'track-thumb';
+        thumb.dataset.trackId = t.id;
+        thumb.style.setProperty('--accent-color', t.accent || '#FCD116');
+        thumb.title = t.name;
+        const image = TRACK_IMAGES[t.id];
+        thumb.innerHTML = image ? `<img src="${image}" alt="${t.name}" />` : '';
+        thumb.addEventListener('click', () => Net.send('select_track', { trackId: t.id }));
+        container.appendChild(thumb);
       });
     }
 
-    container.querySelectorAll('.track-card').forEach(card => {
-      card.classList.toggle('selected', card.dataset.trackId === selectedTrackId);
+    container.querySelectorAll('.track-thumb').forEach(thumb => {
+      thumb.classList.toggle('selected', thumb.dataset.trackId === selectedTrackId);
     });
+
+    const selected = tracks.find(t => t.id === selectedTrackId) || tracks[0];
+    if (selected) {
+      const image = TRACK_IMAGES[selected.id];
+      trackImage.src = image || '';
+      trackImage.alt = selected.name;
+      trackName.textContent = selected.name;
+      trackRegion.textContent = selected.region;
+    }
   }
+
+  function stepTrack(delta) {
+    if (!knownTracks.length) return;
+    const currentId = document.querySelector('.track-thumb.selected')?.dataset.trackId;
+    const idx = Math.max(0, knownTracks.findIndex(t => t.id === currentId));
+    const next = knownTracks[(idx + delta + knownTracks.length) % knownTracks.length];
+    Net.send('select_track', { trackId: next.id });
+  }
+
+  document.getElementById('track-prev').addEventListener('click', () => stepTrack(-1));
+  document.getElementById('track-next').addEventListener('click', () => stepTrack(1));
 
   function renderDifficultyPicker(difficulties, selected) {
     const container = document.getElementById('difficulty-picker');
