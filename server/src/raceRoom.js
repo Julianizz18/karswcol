@@ -1,5 +1,7 @@
 import { TRACKS, getTrackById } from './game-engine/trackCatalog.js';
-import { TOTAL_LAPS, BOT_FILL_TARGET, BOT_COLORS } from './game-engine/gameplayConfig.js';
+import {
+  TOTAL_LAPS, BOT_FILL_TARGET, BOT_COLORS, FINISH_GRACE_MS, RACE_TIME_LIMIT_MS
+} from './game-engine/gameplayConfig.js';
 import { DIFFICULTIES, DEFAULT_DIFFICULTY } from './game-engine/difficulty.js';
 import { GameEngine, TICK_MS } from './game-engine/gameEngine.js';
 import { MatchmakingService } from './matchmaking/matchmakingService.js';
@@ -23,8 +25,10 @@ export class RaceRoom {
 
     this.state = 'lobby'; // lobby | countdown | racing | results
     this.countdownValue = 0;
+    this.countdownHandle = null;
     this.tickHandle = null;
     this.raceStartedAt = null;
+    this.firstFinishAt = null;
     this.playerStates = new Map(); // id -> estado físico (Game Engine), incluye bots
     this.trackId = TRACKS[0].id;
     this.difficulty = DEFAULT_DIFFICULTY;
@@ -36,13 +40,17 @@ export class RaceRoom {
     return getTrackById(this.trackId);
   }
 
+  /** Devuelve null si el jugador entró, o el motivo del rechazo. */
   addPlayer(id, name, color) {
-    if (!this.matchmaking.hasCapacity()) return false;
+    // Solo se entra desde el lobby: un jugador que llega a mitad de carrera
+    // aparecería en la parrilla y bloquearía el cierre de la carrera.
+    if (this.state !== 'lobby') return 'Hay una carrera en curso, intenta de nuevo cuando termine.';
+    if (!this.matchmaking.hasCapacity()) return 'La sala está llena.';
     this.matchmaking.join(id, name, color);
     const slot = this.matchmaking.list().length - 1;
     this.playerStates.set(id, this.gameEngine.createPlayerState(id, name, color, slot, this.track));
     this.sendLobbyUpdate();
-    return true;
+    return null;
   }
 
   removePlayer(id) {
@@ -110,10 +118,11 @@ export class RaceRoom {
     this.state = 'countdown';
     this.countdownValue = 3;
     this.broadcast({ type: 'countdown', seconds: this.countdownValue });
-    const interval = setInterval(() => {
+    this.countdownHandle = setInterval(() => {
       this.countdownValue -= 1;
       if (this.countdownValue <= 0) {
-        clearInterval(interval);
+        clearInterval(this.countdownHandle);
+        this.countdownHandle = null;
         this.startRace();
       } else {
         this.broadcast({ type: 'countdown', seconds: this.countdownValue });
@@ -143,6 +152,7 @@ export class RaceRoom {
   startRace() {
     this.state = 'racing';
     this.raceStartedAt = Date.now();
+    this.firstFinishAt = null;
     this.concurrencyResolver.reset(this.track);
     this.eventManager.reset();
     if (this.fillWithBots) this.spawnBots();
@@ -167,6 +177,7 @@ export class RaceRoom {
 
       const lapEvent = this.gameEngine.step(p, now, this.raceStartedAt, speedFactor, track);
       if (lapEvent) {
+        if (lapEvent.finished && this.firstFinishAt === null) this.firstFinishAt = now;
         this.broadcast({ type: 'event', kind: 'lap_completed', playerId: lapEvent.playerId, name: lapEvent.name, lap: lapEvent.lap });
         const rainEvent = this.eventManager.onLapCompleted(lapEvent.lap, now);
         if (rainEvent) this.broadcast({ type: 'event', kind: rainEvent.type, durationMs: rainEvent.durationMs });
@@ -198,20 +209,36 @@ export class RaceRoom {
       pickups: this.concurrencyResolver.serialize()
     });
 
-    if ([...this.playerStates.values()].every(p => p.finished)) this.finishRace();
+    // Fin de carrera (HU05): todos llegaron, o expiró el tiempo límite. Sin
+    // esto, un jugador quieto o desconectado dejaba la carrera colgada.
+    const allFinished = [...this.playerStates.values()].every(p => p.finished);
+    const graceExpired = this.firstFinishAt !== null && now - this.firstFinishAt >= FINISH_GRACE_MS;
+    const timeLimitExpired = now - this.raceStartedAt >= RACE_TIME_LIMIT_MS;
+    if (allFinished || graceExpired || timeLimitExpired) this.finishRace();
   }
 
   finishRace() {
     if (this.tickHandle) clearInterval(this.tickHandle);
+    this.tickHandle = null;
     this.state = 'results';
     const ranking = this.rankingService.buildRanking([...this.playerStates.values()]);
     this.rankingService.persistRace(ranking);
     this.broadcast({ type: 'results', ranking });
   }
 
+  /** Volver al lobby a pedido de un jugador: solo desde la pantalla de resultados. */
+  requestRestart() {
+    if (this.state !== 'results') return;
+    this.resetToLobby();
+  }
+
   resetToLobby() {
     if (this.tickHandle) clearInterval(this.tickHandle);
     this.tickHandle = null;
+    // Si se vuelve al lobby durante la cuenta regresiva, la carrera no debe arrancar igual.
+    if (this.countdownHandle) clearInterval(this.countdownHandle);
+    this.countdownHandle = null;
+    this.firstFinishAt = null;
     this.concurrencyResolver.clear();
     this.eventManager.reset();
     this.removeBots();

@@ -22,9 +22,16 @@ const MIME = {
 export function createGateway({ clientDir, room }) {
   const server = http.createServer((req, res) => {
     let filePath = req.url === '/' ? '/index.html' : req.url;
-    filePath = path.join(clientDir, decodeURIComponent(filePath.split('?')[0]));
+    try {
+      filePath = path.join(clientDir, decodeURIComponent(filePath.split('?')[0]));
+    } catch {
+      // URL mal codificada (p. ej. "/%"): sin este catch tumbaba el proceso.
+      res.writeHead(400);
+      res.end('Bad request');
+      return;
+    }
 
-    if (!filePath.startsWith(clientDir)) {
+    if (!filePath.startsWith(clientDir + path.sep)) {
       res.writeHead(403);
       res.end('Forbidden');
       return;
@@ -65,13 +72,15 @@ export function createGateway({ clientDir, room }) {
       } catch {
         return;
       }
+      // JSON válido pero no objeto ("null", "3", ...): se ignora en vez de tumbar el proceso.
+      if (!msg || typeof msg !== 'object') return;
 
       switch (msg.type) {
         case 'join': {
           const name = String(msg.name || `Piloto ${id}`).slice(0, 20);
           const color = /^#[0-9a-fA-F]{6}$/.test(msg.color) ? msg.color : '#FCD116';
-          const joined = room.addPlayer(id, name, color);
-          if (joined) ws.send(JSON.stringify({ type: 'joined', id }));
+          const rejection = room.addPlayer(id, name, color);
+          ws.send(JSON.stringify(rejection ? { type: 'join_rejected', reason: rejection } : { type: 'joined', id }));
           break;
         }
         case 'ready':
@@ -90,7 +99,7 @@ export function createGateway({ clientDir, room }) {
           room.setInput(id, msg.input);
           break;
         case 'restart':
-          room.resetToLobby();
+          room.requestRestart();
           break;
         default:
           break;

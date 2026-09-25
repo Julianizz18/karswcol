@@ -10,6 +10,10 @@ export const MAX_SPEED = 5.2;
 export const WALL_BOUNCE_DAMPING = 0.75; // pierde velocidad al rozar el borde de la pista
 
 export const TOTAL_LAPS = 3;
+// Fin de carrera (HU05): tras llegar el primero, los demás tienen este margen
+// para terminar; y ninguna carrera dura más que el límite absoluto.
+export const FINISH_GRACE_MS = 30000;
+export const RACE_TIME_LIMIT_MS = 5 * 60 * 1000;
 export const PICKUP_RADIUS = 26;
 export const PICKUP_RESPAWN_MS = 6000;
 export const BOOST_DURATION_MS = 2500;

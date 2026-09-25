@@ -148,13 +148,25 @@
       Router.show('lobby');
     });
 
+    Net.on('join_rejected', msg => {
+      document.getElementById('join-error').textContent = msg.reason;
+    });
+
     Net.on('lobby_update', msg => {
       const list = document.getElementById('lobby-players');
       list.innerHTML = '';
       msg.players.forEach(p => {
         const li = document.createElement('li');
-        li.innerHTML = `<span><span class="swatch" style="background:${p.color || '#FCD116'}"></span>${p.name}${p.id === selfId ? ' (tú)' : ''}</span>` +
-          `<span class="${p.ready ? 'ready-tag' : ''}">${p.ready ? 'Listo' : 'Esperando...'}</span>`;
+        // El nombre lo escribe el jugador: se inserta como texto, nunca como HTML.
+        const nameCell = document.createElement('span');
+        const swatch = document.createElement('span');
+        swatch.className = 'swatch';
+        swatch.style.background = p.color || '#FCD116';
+        nameCell.append(swatch, `${p.name}${p.id === selfId ? ' (tú)' : ''}`);
+        const status = document.createElement('span');
+        if (p.ready) status.className = 'ready-tag';
+        status.textContent = p.ready ? 'Listo' : 'Esperando...';
+        li.append(nameCell, status);
         list.appendChild(li);
       });
 
