@@ -1,4 +1,4 @@
-import { RAIN_DURATION_MS, RAIN_SPEED_FACTOR } from '../game-engine/gameplayConfig.js';
+import { RAIN_DURATION_MS, RAIN_SPEED_FACTOR, RAIN_GRIP_FACTOR } from '../game-engine/gameplayConfig.js';
 
 // Event Manager (HU04, componente "Event Manager" de la sección 4.1).
 // Genera y aplica eventos dinámicos durante la carrera. Por ahora solo
@@ -12,10 +12,14 @@ export class EventManager {
     this.rainTriggered = false;
   }
 
-  reset() {
-    this.rainActive = false;
-    this.rainEndsAt = null;
-    this.rainTriggered = false;
+  /**
+   * `startWet`: si en la región está lloviendo de verdad (clima real), la
+   * carrera arranca con la pista mojada y sigue así hasta el final.
+   */
+  reset(startWet = false) {
+    this.rainActive = startWet;
+    this.rainEndsAt = startWet ? Infinity : null;
+    this.rainTriggered = startWet;
   }
 
   /** Se invoca cuando el Game Engine reporta que un jugador completó una vuelta. */
@@ -34,6 +38,10 @@ export class EventManager {
       return { type: 'rain_end' };
     }
     return null;
+  }
+
+  gripFactor() {
+    return this.rainActive ? RAIN_GRIP_FACTOR : 1;
   }
 
   speedFactor() {

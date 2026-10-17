@@ -31,31 +31,105 @@ const SPECIAL_SPRITES = Object.fromEntries(
   Object.entries(KART_VEHICLE_IMAGES).map(([color, src]) => [color, loadSprite(src)])
 );
 
+// Vista trasera opcional por vehículo para la cámara 3D (race3d.js), como
+// { src, crop: [x, y, ancho, alto] }. Los vehículos sin entrada aquí usan su
+// modelo 3D (el avión, el bus, el taxi, el metro y el burro ya tienen uno).
+const REAR_VEHICLE_IMAGES = {};
+
+
+// Los bots usan colores propios que no tienen vehículo; se les asigna uno de
+// la flota de forma estable (según su id) para no dibujar karts genéricos.
+function vehicleColorFor(p, fallbackColor) {
+  const color = (p.color || fallbackColor || '').toUpperCase();
+  if (SPECIAL_SPRITES[color]) return color;
+  const key = String(p.id || p.name || '');
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  return KART_COLORS[hash % KART_COLORS.length];
+}
+
 const Race = (() => {
   const canvas = document.getElementById('race-canvas');
   const ctx = canvas.getContext('2d');
-  // El servidor trabaja en un mundo de 900x560 (ver trackCatalog.js); el
-  // canvas se declara más grande en el HTML para verse mejor en pantalla,
-  // y aquí se escala el dibujado para llenarlo sin tocar ninguna
-  // coordenada de física ni de red.
-  const WORLD_WIDTH = 900;
-  const WORLD_HEIGHT = 560;
+  const canvas3d = document.getElementById('race-canvas-3d');
+  const minimap = document.getElementById('minimap');
+  // Cada pista tiene su propio tamaño (ver trackCatalog.js): la vista desde
+  // arriba encuadra el trazado completo (track.bounds) dentro del canvas
+  // sin tocar ninguna coordenada de física ni de red.
+  const VIEW_MARGIN = 70;
   let track = null;
+  let view = { scale: 1, x: 0, y: 0 };
+  let pixelRatio = 1;
+  let trackWeather = null; // clima real/típico de la pista (lo usa la vista 3D)
+  // Cámara de carrera en 3D por defecto (race3d.js); C alterna con la vista 2D desde arriba.
+  let chaseView = true;
 
-  function setTrack(t) {
-    track = t;
+  function race3d() {
+    return window.Race3D && window.Race3D.supported ? window.Race3D : null;
   }
 
-  function render(players, selfId, pickups = [], rainActive = false) {
+  function setTrack(t, weather = null) {
+    track = t;
+    trackWeather = weather;
+    computeView();
+    if (race3d()) race3d().setTrack(t, weather);
+  }
+
+  /** Encuadra la pista completa en el canvas, con su tamaño actual. */
+  function computeView() {
+    if (!track) return;
+    const b = track.bounds;
+    const margin = VIEW_MARGIN * pixelRatio;
+    const scale = Math.min(
+      (canvas.width - margin * 2) / (b.maxX - b.minX),
+      (canvas.height - margin * 2) / (b.maxY - b.minY)
+    );
+    view = {
+      scale,
+      x: canvas.width / 2 - ((b.minX + b.maxX) / 2) * scale,
+      y: canvas.height / 2 - ((b.minY + b.maxY) / 2) * scale
+    };
+  }
+
+  /** La resolución del canvas sigue a su tamaño en pantalla (ventana, zoom, giro del celular). */
+  function fitCanvas() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.round(canvas.clientWidth * dpr);
+    const h = Math.round(canvas.clientHeight * dpr);
+    if (!w || !h || (w === canvas.width && h === canvas.height)) return;
+    canvas.width = w;
+    canvas.height = h;
+    pixelRatio = dpr;
+    computeView();
+  }
+
+  function toggleView() {
+    chaseView = !chaseView;
+    return chaseView && !!race3d();
+  }
+
+  function render(players, selfId, pickups = [], rainActive = false, puddles = []) {
+    const r3d = chaseView ? race3d() : null;
+    canvas3d.hidden = !r3d;
+    minimap.hidden = !r3d; // la vista desde arriba ya muestra la pista completa
+    canvas.hidden = !!r3d;
+    if (r3d) {
+      // El módulo 3D carga en paralelo: si llegó tarde, construye la pista ahora.
+      if (track && r3d.track !== track) r3d.setTrack(track, trackWeather);
+      r3d.update(players, selfId, pickups, rainActive, puddles);
+      return;
+    }
+
+    fitCanvas();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const scale = Math.min(canvas.width / WORLD_WIDTH, canvas.height / WORLD_HEIGHT);
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
-
     drawBackground();
+    ctx.setTransform(view.scale, 0, 0, view.scale, view.x, view.y);
     drawTrack();
+    puddles.forEach(drawPuddle);
     pickups.forEach(drawPickup);
     players.forEach((p, idx) => drawKart(p, p.color || KART_COLORS[idx % KART_COLORS.length], p.id === selfId));
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (rainActive) drawRain();
   }
 
@@ -63,116 +137,98 @@ const Race = (() => {
     return (track && track.palette) || { sky: ['#0d3b66', '#1c6e5f', '#1b6b3a'], grass: '#155c30', road: '#3a3f47', accent: '#FCD116' };
   }
 
+  // Fondo en coordenadas de pantalla (antes de encuadrar la pista).
   function drawBackground() {
     const pal = palette();
-    const sky = ctx.createLinearGradient(0, 0, 0, WORLD_HEIGHT);
-    sky.addColorStop(0, pal.sky[0]);
-    sky.addColorStop(0.38, pal.sky[1]);
-    sky.addColorStop(0.42, pal.sky[2] || pal.grass);
-    sky.addColorStop(1, pal.grass);
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    ctx.fillStyle = pal.grass;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(255,255,255,0.045)';
+    for (let i = 0; i < 400; i++) {
+      ctx.fillRect((i * 97) % canvas.width, (i * 53 + Math.floor(i / 7) * 31) % canvas.height, 2, 2);
+    }
+  }
 
-    // Silueta de relieve en la franja superior (montañas, selva o costa según la pista).
-    ctx.fillStyle = 'rgba(6, 20, 40, 0.4)';
+  function tracePath() {
     ctx.beginPath();
-    ctx.moveTo(0, 90);
-    ctx.lineTo(0, 40);
-    for (let x = 0; x <= WORLD_WIDTH; x += 60) {
-      const y = 20 + Math.abs(Math.sin(x * 0.008)) * 40 + Math.cos(x * 0.02) * 10;
-      ctx.lineTo(x, y);
-    }
-    ctx.lineTo(WORLD_WIDTH, 90);
+    track.centerline.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
     ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = 'rgba(255,255,255,0.04)';
-    for (let i = 0; i < 140; i++) {
-      const gx = (i * 97) % WORLD_WIDTH;
-      const gy = 90 + ((i * 53) % (WORLD_HEIGHT - 100));
-      ctx.fillRect(gx, gy, 2, 2);
-    }
   }
 
   function drawTrack() {
     if (!track) return;
     const pal = palette();
-    const { x: cx, y: cy } = track.center;
-    const rx = track.rx;
-    const ry = track.ry;
     const roadWidth = track.roadWidth;
-
+    const curb = (track.curbWidth || 7) * 2;
     ctx.save();
-    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-    ctx.lineWidth = roadWidth + 14;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + 6, rx, ry, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
 
-    ctx.strokeStyle = '#e8e8e8';
-    ctx.lineWidth = roadWidth + 14;
-    ctx.setLineDash([22, 22]);
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    // Sombra, bordillos rojo/blanco, asfalto y línea central.
+    ctx.translate(0, 6);
+    tracePath();
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.lineWidth = roadWidth + curb;
+    ctx.stroke();
+    ctx.translate(0, -6);
+
+    tracePath();
+    ctx.strokeStyle = '#d7262e';
+    ctx.lineWidth = roadWidth + curb;
+    ctx.stroke();
+    ctx.setLineDash([18, 18]);
+    ctx.strokeStyle = '#f4f4f4';
     ctx.stroke();
     ctx.setLineDash([]);
 
+    tracePath();
     ctx.strokeStyle = pal.road;
     ctx.lineWidth = roadWidth;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    tracePath();
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
     ctx.lineWidth = 3;
     ctx.setLineDash([16, 18]);
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
-
-    drawStartBanner(track.checkpoints[0]);
-    track.checkpoints.forEach((cp, i) => {
-      if (i === 0) return;
-      ctx.beginPath();
-      ctx.arc(cp.x, cp.y, track.checkpointRadius, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.55)';
-      ctx.font = 'bold 11px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(`CP${i}`, cp.x, cp.y + 4);
-    });
-  }
-
-  function drawStartBanner(cp) {
-    if (!cp) return;
-    const pal = palette();
-    const w = 96;
-    const h = 14;
-    ctx.save();
-    ctx.translate(cp.x, cp.y - 50);
-    ctx.fillStyle = '#0d1526';
-    ctx.fillRect(-w / 2 - 4, -4, w + 8, h + 8);
-    const cols = 8;
-    const cw = w / cols;
-    for (let i = 0; i < cols; i++) {
-      ctx.fillStyle = i % 2 === 0 ? '#fff' : '#111';
-      ctx.fillRect(-w / 2 + i * cw, 0, cw, h);
-    }
     ctx.restore();
 
+    drawStartLine();
+  }
+
+  // Línea de meta a cuadros atravesando la carretera.
+  function drawStartLine() {
+    const { x, y, angle } = track.startLine;
+    const w = track.roadWidth;
+    const cell = w / 8;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    for (let row = 0; row < 2; row++) {
+      for (let col = 0; col < 8; col++) {
+        ctx.fillStyle = (row + col) % 2 ? '#111' : '#fff';
+        ctx.fillRect(-cell + row * cell, -w / 2 + col * cell, cell, cell);
+      }
+    }
+    ctx.restore();
+  }
+
+  // Charco visto desde arriba: elipse azulada que crece con el nivel de agua.
+  function drawPuddle(pd) {
+    if (pd.level <= 0) return;
+    ctx.save();
+    ctx.translate(pd.x, pd.y);
+    ctx.rotate(pd.angle);
+    ctx.globalAlpha = 0.35 + pd.level * 0.4;
+    ctx.fillStyle = '#5d7d9c';
     ctx.beginPath();
-    ctx.arc(cp.x, cp.y, track.checkpointRadius, 0, Math.PI * 2);
-    ctx.strokeStyle = pal.accent + 'b3';
-    ctx.lineWidth = 3;
+    ctx.ellipse(0, 0, pd.radius * pd.stretch * pd.level, pd.radius * pd.level, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.5 * pd.level;
+    ctx.strokeStyle = '#cfe3ff';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
-    ctx.fillStyle = pal.accent;
-    ctx.font = 'bold 11px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('META', cp.x, cp.y + 4);
+    ctx.restore();
   }
 
   function drawPickup(pu) {
@@ -199,8 +255,8 @@ const Race = (() => {
   function drawRain() {
     if (!rainDrops) {
       rainDrops = Array.from({ length: 90 }, () => ({
-        x: Math.random() * WORLD_WIDTH,
-        y: Math.random() * WORLD_HEIGHT,
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
         len: 8 + Math.random() * 10,
         speed: 6 + Math.random() * 6
       }));
@@ -215,18 +271,18 @@ const Race = (() => {
       ctx.stroke();
       d.y += d.speed;
       d.x -= 1.2;
-      if (d.y > WORLD_HEIGHT) {
+      if (d.y > canvas.height) {
         d.y = -10;
-        d.x = Math.random() * WORLD_WIDTH;
+        d.x = Math.random() * canvas.width;
       }
     });
     ctx.fillStyle = 'rgba(20,60,90,0.12)';
-    ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
   }
 
   function drawKart(p, color, isSelf) {
-    const special = SPECIAL_SPRITES[(color || '').toUpperCase()];
+    const special = SPECIAL_SPRITES[vehicleColorFor(p, color)];
 
     ctx.save();
     ctx.translate(p.x, p.y);
@@ -282,5 +338,5 @@ const Race = (() => {
     ctx.shadowBlur = 0;
   }
 
-  return { render, setTrack };
+  return { render, setTrack, toggleView };
 })();

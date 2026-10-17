@@ -1,0 +1,166 @@
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import WebSocket from 'ws';
+import { createGateway } from '../src/gateway/gateway.js';
+import { createAuthService } from '../src/auth/authService.js';
+
+// Pruebas del login con Google: el verificador de Google se reemplaza por
+// uno falso, así se prueba todo el flujo (API, cookie, WebSocket) sin red.
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const CLIENT_DIR = path.join(__dirname, '..', '..', 'client');
+
+const FAKE_TOKENS = {
+  'token-valido': { sub: '123', email: 'piloto@example.com', email_verified: true, name: 'Piloto Prueba', picture: 'https://lh3.googleusercontent.com/a/foto' },
+  'token-foto-externa': { sub: '789', email: 'y@example.com', email_verified: true, name: 'Y', picture: 'https://evil.example/track.png' },
+  'token-no-verificado': { sub: '456', email: 'x@example.com', email_verified: false, name: 'X' }
+};
+
+const room = {
+  players: [],
+  addPlayer(id, name, color, avatar) { this.players.push({ id, name, avatar }); return null; },
+  removePlayer() {}, setReady() {}, selectTrack() {}, selectDifficulty() {},
+  toggleBots() {}, setInput() {}, requestRestart() {}
+};
+
+let server;
+let base;
+
+before(async () => {
+  const auth = createAuthService({
+    clientId: 'test-client-id.apps.googleusercontent.com',
+    sessionSecret: 'secreto-de-prueba',
+    verifyIdToken: async token => {
+      if (!FAKE_TOKENS[token]) throw new Error('Token de Google inválido.');
+      return FAKE_TOKENS[token];
+    }
+  });
+  server = createGateway({ clientDir: CLIENT_DIR, room, auth });
+  await new Promise(resolve => server.listen(0, resolve));
+  base = `http://localhost:${server.address().port}`;
+});
+
+after(() => server.close());
+
+async function login(credential) {
+  return fetch(`${base}/api/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ credential })
+  });
+}
+
+function sessionCookieFrom(res) {
+  return res.headers.get('set-cookie').split(';')[0];
+}
+
+function openSocket(cookie) {
+  return new WebSocket(base.replace('http', 'ws'), { headers: cookie ? { cookie } : {} });
+}
+
+test('config expone el client ID de Google', async () => {
+  const res = await fetch(`${base}/api/auth/config`);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { googleClientId: 'test-client-id.apps.googleusercontent.com' });
+});
+
+test('/me sin sesión responde 401', async () => {
+  const res = await fetch(`${base}/api/auth/me`);
+  assert.equal(res.status, 401);
+});
+
+test('login con token inválido responde 401 y no crea cookie', async () => {
+  const res = await login('token-falso');
+  assert.equal(res.status, 401);
+  assert.equal(res.headers.get('set-cookie'), null);
+});
+
+test('login con correo no verificado se rechaza', async () => {
+  const res = await login('token-no-verificado');
+  assert.equal(res.status, 401);
+});
+
+test('login válido crea cookie HttpOnly y /me devuelve el usuario', async () => {
+  const res = await login('token-valido');
+  assert.equal(res.status, 200);
+  const setCookie = res.headers.get('set-cookie');
+  assert.match(setCookie, /karswcol_session=/);
+  assert.match(setCookie, /HttpOnly/);
+  assert.match(setCookie, /SameSite=Lax/);
+
+  const me = await fetch(`${base}/api/auth/me`, { headers: { cookie: sessionCookieFrom(res) } });
+  assert.equal(me.status, 200);
+  assert.deepEqual((await me.json()).user, { name: 'Piloto Prueba', email: 'piloto@example.com', picture: 'https://lh3.googleusercontent.com/a/foto' });
+});
+
+test('cookie manipulada no es aceptada', async () => {
+  const res = await login('token-valido');
+  const [name, value] = sessionCookieFrom(res).split('=');
+  const sig = decodeURIComponent(value).split('.')[1];
+  const forged = Buffer.from(JSON.stringify({ sub: '999', name: 'Hacker', exp: Date.now() + 1e9 })).toString('base64url');
+  const me = await fetch(`${base}/api/auth/me`, { headers: { cookie: `${name}=${forged}.${sig}` } });
+  assert.equal(me.status, 401);
+});
+
+test('logout borra la cookie', async () => {
+  const res = await fetch(`${base}/api/auth/logout`, { method: 'POST' });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('set-cookie'), /Max-Age=0/);
+});
+
+test('login desde otro origen se rechaza', async () => {
+  const res = await fetch(`${base}/api/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', origin: 'https://evil.example' },
+    body: JSON.stringify({ credential: 'token-valido' })
+  });
+  assert.equal(res.status, 403);
+});
+
+test('WebSocket sin sesión se cierra con código 4401', async () => {
+  const ws = openSocket(null);
+  const code = await new Promise(resolve => ws.on('close', resolve));
+  assert.equal(code, 4401);
+});
+
+test('WebSocket con sesión permite unirse a la sala', async () => {
+  const res = await login('token-valido');
+  const ws = openSocket(sessionCookieFrom(res));
+  await new Promise(resolve => ws.on('open', resolve));
+  ws.send(JSON.stringify({ type: 'join', name: '', color: '#FCD116' }));
+  const msg = await new Promise(resolve => ws.on('message', raw => resolve(JSON.parse(raw))));
+  assert.equal(msg.type, 'joined');
+  // Sin nombre explícito se usa el nombre de la cuenta de Google.
+  assert.equal(room.players.at(-1).name, 'Piloto Prueba');
+  ws.close();
+});
+
+test('los archivos estáticos se siguen sirviendo', async () => {
+  const res = await fetch(`${base}/`);
+  assert.equal(res.status, 200);
+  assert.match(await res.text(), /screen-login/);
+});
+
+test('/me renueva la cookie de sesión', async () => {
+  const res = await login('token-valido');
+  const me = await fetch(`${base}/api/auth/me`, { headers: { cookie: sessionCookieFrom(res) } });
+  assert.match(me.headers.get('set-cookie'), /karswcol_session=.+Max-Age=43200/);
+  assert.equal(me.headers.get('cache-control'), 'no-store');
+});
+
+test('fotos que no son de Google se descartan', async () => {
+  const res = await login('token-foto-externa');
+  assert.equal((await res.json()).user.picture, '');
+});
+
+test('la foto de Google llega a la sala desde la sesión, no desde el cliente', async () => {
+  const res = await login('token-valido');
+  const ws = openSocket(sessionCookieFrom(res));
+  await new Promise(resolve => ws.on('open', resolve));
+  ws.send(JSON.stringify({ type: 'join', name: 'Otro', color: '#FCD116', avatar: 'https://evil.example/x.png' }));
+  await new Promise(resolve => ws.on('message', resolve));
+  assert.equal(room.players.at(-1).avatar, 'https://lh3.googleusercontent.com/a/foto');
+  ws.close();
+});

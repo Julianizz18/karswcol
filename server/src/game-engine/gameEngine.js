@@ -1,6 +1,7 @@
 import {
-  TURN_SPEED, ACCEL, FRICTION, MAX_SPEED, WALL_BOUNCE_DAMPING,
-  TOTAL_LAPS, BOOST_DURATION_MS, BOOST_MULTIPLIER
+  TURN_SPEED, ACCEL, BRAKE, FRICTION, MAX_SPEED, WALL_GRAZE_DAMPING, WALL_IMPACT_DEPTH, WALL_IMPACT_DAMPING, WALL_IMPACT_MAX_SPEED, CRASH_STUN_TICKS, GRIP, SKID_SLIP_ANGLE, SKID_SCRUB, SKID_MAX_SCRUB,
+  TOTAL_LAPS, BOOST_DURATION_MS, BOOST_MULTIPLIER,
+  PUDDLE_GRIP_FACTOR, PUDDLE_DRAG, AQUAPLANING_MIN_SPEED
 } from './gameplayConfig.js';
 
 // Game Engine — server-authoritative (HU02, componente "Game Engine" de la
@@ -13,6 +14,14 @@ import {
 
 export { TICK_MS } from './gameplayConfig.js';
 
+// Muestras de la línea central revisadas a cada lado de la última posición
+// conocida (×4 unidades): cubre de sobra lo que avanza un kart por tick.
+const TRACK_SEARCH_WINDOW = 30;
+
+function angleDiff(a, b) {
+  return Math.atan2(Math.sin(a - b), Math.cos(a - b));
+}
+
 export class GameEngine {
   createPlayerState(id, name, color, startSlot, track) {
     const start = track.startPositions[startSlot % track.startPositions.length];
@@ -23,13 +32,15 @@ export class GameEngine {
       x: start.x,
       y: start.y,
       angle: start.angle,
+      moveAngle: start.angle, // dirección real de movimiento (≠ angle al derrapar)
       speed: 0,
       input: { left: false, right: false, up: false, down: false },
       nextCheckpoint: 0,
       lap: 0,
       finished: false,
       finishTime: null,
-      boostUntil: 0
+      boostUntil: 0,
+      trackIdx: start.idx // posición conocida sobre la línea central (ver locateOnTrack)
     };
   }
 
@@ -38,6 +49,8 @@ export class GameEngine {
     p.x = start.x;
     p.y = start.y;
     p.angle = start.angle;
+    p.moveAngle = start.angle;
+    p.trackIdx = start.idx;
   }
 
   resetPlayerState(p) {
@@ -59,22 +72,48 @@ export class GameEngine {
    * Devuelve un evento "lap_completed" cuando corresponde, para que Event
    * Manager y Ranking Service reaccionen sin acoplarse a la física.
    */
-  step(p, now, raceStartedAt, effectiveMaxSpeedFactor, track) {
+  step(p, now, raceStartedAt, effectiveMaxSpeedFactor, track, gripFactor = 1, puddle = null) {
     if (p.finished) return null;
 
-    if (p.input.left) p.angle -= TURN_SPEED;
-    if (p.input.right) p.angle += TURN_SPEED;
-    if (p.input.up) p.speed += ACCEL;
-    if (p.input.down) p.speed -= ACCEL;
+    // Aquaplaning: sobre un charco el agua separa las llantas del asfalto.
+    p.aquaplaning = !!puddle && Math.abs(p.speed) > AQUAPLANING_MIN_SPEED;
+    if (puddle) {
+      gripFactor *= PUDDLE_GRIP_FACTOR;
+      p.speed *= PUDDLE_DRAG;
+    }
+
+    // El volante gira el kart (p.angle), pero la dirección en que se mueve
+    // (p.moveAngle) solo puede seguirlo tan rápido como permite el agarre:
+    // a velocidad v cambia como mucho GRIP / v por tick. Si se entra muy
+    // rápido a una curva, el kart apunta hacia adentro pero se desliza hacia
+    // afuera (derrape) y termina contra el muro: hay que frenar antes.
+    const steering = (p.input.right ? 1 : 0) - (p.input.left ? 1 : 0);
+    p.angle += steering * TURN_SPEED;
+    if (p.moveAngle == null) p.moveAngle = p.angle;
+    const speed = Math.abs(p.speed);
+    const maxDirChange = speed > 0.01 ? (GRIP * gripFactor) / speed : Math.PI;
+    const slip = angleDiff(p.angle, p.moveAngle);
+    p.moveAngle += Math.max(-maxDirChange, Math.min(maxDirChange, slip));
+    const remainingSlip = Math.abs(angleDiff(p.angle, p.moveAngle));
+    p.skidding = remainingSlip > SKID_SLIP_ANGLE;
+    // Ir de lado frena: fricción lateral proporcional al ángulo de derrape.
+    if (remainingSlip > 0.02) p.speed *= 1 - Math.min(SKID_MAX_SCRUB, remainingSlip * SKID_SCRUB);
+
+    // El boost empuja más (la velocidad final la fija la fricción, no solo el tope).
+    const boosted = p.boostUntil > now;
+    const accel = boosted ? ACCEL * BOOST_MULTIPLIER : ACCEL;
+    if (p.crashTicks > 0) p.crashTicks -= 1;
+    if (p.input.up && !(p.crashTicks > 0)) p.speed += accel;
+    // Freno fuerte mientras se avanza; ya detenido, "abajo" es reversa suave.
+    if (p.input.down) p.speed -= p.speed > 0 ? BRAKE : ACCEL;
     p.speed *= FRICTION;
 
-    const boosted = p.boostUntil > now;
     let effectiveMax = MAX_SPEED * effectiveMaxSpeedFactor;
     if (boosted) effectiveMax *= BOOST_MULTIPLIER;
 
     p.speed = Math.max(-effectiveMax / 2, Math.min(effectiveMax, p.speed));
-    p.x += Math.cos(p.angle) * p.speed;
-    p.y += Math.sin(p.angle) * p.speed;
+    p.x += Math.cos(p.moveAngle) * p.speed;
+    p.y += Math.sin(p.moveAngle) * p.speed;
 
     this.confineToRoad(p, track);
 
@@ -82,31 +121,52 @@ export class GameEngine {
   }
 
   /**
-   * Mantiene al kart dentro del anillo de la carretera (colisión con el
-   * borde). Se trabaja en coordenadas normalizadas de la elipse: en ese
-   * espacio la pista es siempre un anillo centrado en radio 1, así que
-   * proyectar el punto de vuelta al rango permitido funciona igual sin
-   * importar la forma (rx/ry) de cada circuito.
+   * Ubica al kart sobre la línea central: devuelve el índice de la muestra
+   * más cercana. Se busca solo alrededor de la última posición conocida
+   * (p.trackIdx), lo que es rápido y evita "saltar" a un tramo paralelo de
+   * la pista que pase cerca (horquillas, rectas de ida y vuelta).
+   */
+  locateOnTrack(p, track) {
+    const { x, y, count } = track.path;
+    let best = 0;
+    let bestDist = Infinity;
+    const scan = (from, to) => {
+      for (let k = from; k <= to; k++) {
+        const i = ((k % count) + count) % count;
+        const d = (x[i] - p.x) ** 2 + (y[i] - p.y) ** 2;
+        if (d < bestDist) {
+          bestDist = d;
+          best = i;
+        }
+      }
+    };
+    if (p.trackIdx == null) scan(0, count - 1);
+    else scan(p.trackIdx - TRACK_SEARCH_WINDOW, p.trackIdx + TRACK_SEARCH_WINDOW);
+    p.trackIdx = best;
+    return best;
+  }
+
+  /**
+   * Mantiene al kart dentro de la carretera (colisión con los muros): si su
+   * distancia lateral a la línea central supera medio ancho de pista, se lo
+   * devuelve al borde y pierde velocidad. Funciona igual para cualquier
+   * trazado (rectas, horquillas, chicanas).
    */
   confineToRoad(p, track) {
-    const { center, rx, ry, roadWidth } = track;
-    const dx = p.x - center.x;
-    const dy = p.y - center.y;
-    const nx = dx / rx;
-    const ny = dy / ry;
-    const t = Math.sqrt(nx * nx + ny * ny) || 0.0001;
-
-    const avgRadius = (rx + ry) / 2;
-    const halfBand = (roadWidth / 2) / avgRadius;
-    const tMin = 1 - halfBand;
-    const tMax = 1 + halfBand;
-
-    if (t < tMin || t > tMax) {
-      const clamped = Math.max(tMin, Math.min(tMax, t));
-      const scale = clamped / t;
-      p.x = center.x + dx * scale;
-      p.y = center.y + dy * scale;
-      p.speed *= WALL_BOUNCE_DAMPING;
+    const i = this.locateOnTrack(p, track);
+    const { x, y, nx, ny } = track.path;
+    const lateral = (p.x - x[i]) * nx[i] + (p.y - y[i]) * ny[i];
+    const limit = track.roadWidth / 2;
+    if (Math.abs(lateral) > limit) {
+      const excess = lateral - Math.sign(lateral) * limit;
+      p.x -= nx[i] * excess;
+      p.y -= ny[i] * excess;
+      if (Math.abs(excess) > WALL_IMPACT_DEPTH) {
+        p.speed = Math.min(p.speed * WALL_IMPACT_DAMPING, WALL_IMPACT_MAX_SPEED);
+        p.crashTicks = CRASH_STUN_TICKS;
+      } else {
+        p.speed *= WALL_GRAZE_DAMPING;
+      }
     }
   }
 
@@ -147,7 +207,10 @@ export class GameEngine {
       speed: p.speed,
       lap: p.lap,
       finished: p.finished,
-      boosted: this.isBoosted(p, now)
+      boosted: this.isBoosted(p, now),
+      skidding: !!p.skidding,
+      aquaplaning: !!p.aquaplaning,
+      crashed: p.crashTicks > 0
     };
   }
 }

@@ -13,3 +13,5 @@ altiplanoBogota.png
 ejeCafetero.png
 llanosOrientales.png
 selvaAmazonica.png
+.env
+server/.env

@@ -14,7 +14,7 @@ const Net = (() => {
         const msg = JSON.parse(evt.data);
         (handlers[msg.type] || []).forEach(fn => fn(msg));
       };
-      ws.onclose = () => (handlers['disconnected'] || []).forEach(fn => fn());
+      ws.onclose = evt => (handlers['disconnected'] || []).forEach(fn => fn(evt));
     });
   }
 

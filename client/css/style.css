@@ -364,6 +364,39 @@ h2 {
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03), 0 20px 45px rgba(0,0,0,0.45);
 }
 
+/* Trazado de la pista sobre la imagen del lobby. */
+.track-layout {
+  position: absolute;
+  z-index: 2; /* encima de la imagen (.showcase-image tiene z-index 1) */
+  right: 10px;
+  bottom: 10px;
+  width: 34%;
+  height: auto;
+  max-width: 100%;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 12px;
+  background: rgba(7,12,23,0.72);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  backdrop-filter: blur(3px);
+}
+
+.track-weather {
+  margin: 2px auto 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+}
+
+.track-description {
+  margin: 4px auto 10px;
+  max-width: 520px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
 .showcase-glow {
   position: absolute;
   inset: -20%;
@@ -517,22 +550,41 @@ h2 {
 
 /* ---------- Carrera ---------- */
 
+#screen-race { padding: 0; }
+#screen-race.active { display: block; }
+
+/* La carrera ocupa toda la ventana en cualquier dispositivo: la barra superior
+   toma lo que necesita y la pista se estira en el resto (ver js/race*.js,
+   que ajustan la resolución del canvas al tamaño real). */
 .race-wrap {
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  background: #05080f;
+  overscroll-behavior: none;
 }
 
 .hud {
+  flex: 0 0 auto;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  width: 1200px;
-  max-width: 100%;
-  font-size: 1.05rem;
+  gap: 4px 16px;
+  width: 100%;
+  font-size: clamp(0.78rem, 1.4vw, 1.05rem);
   font-weight: 600;
-  padding: 0 4px;
+  padding: calc(6px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) 6px calc(14px + env(safe-area-inset-left));
+  background: #0a0f1b;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+@media (max-width: 900px), (pointer: coarse) {
+  #hud-hint { display: none; }
 }
 
 #hud-track { color: var(--amarillo); font-size: 0.9rem; }
@@ -550,21 +602,18 @@ canvas {
   height: auto;
 }
 
-.speed-bar {
-  width: 1200px;
-  max-width: 100%;
-  height: 10px;
-  background: #0d1526;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.08);
-}
-
-.speed-fill {
-  height: 100%;
-  width: 0%;
-  background: linear-gradient(90deg, var(--azul), var(--amarillo), var(--rojo));
-  transition: width .08s linear;
+/* Velocímetro (js/hud.js): va directo sobre la imagen, sin panel. */
+.race-stage .gauge {
+  position: absolute;
+  right: calc(12px + env(safe-area-inset-right));
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  width: clamp(150px, 24%, 340px);
+  height: auto;
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  pointer-events: none;
 }
 
 /* ---------- Resultados ---------- */
@@ -632,3 +681,247 @@ canvas {
   .hero-content { padding: 22px 20px 28px; }
   .stage-panel { padding: 24px; }
 }
+
+/* ---------- Login con Google ---------- */
+
+.login-title {
+  margin: 8px 0 4px;
+}
+
+.login-hero .tagline { margin-bottom: 20px; }
+
+.google-signin {
+  display: flex;
+  justify-content: center;
+  min-height: 44px;
+  margin-bottom: 8px;
+}
+
+.user-chip {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 8px;
+  border-radius: 999px;
+  background: rgba(7,12,23,0.75);
+  border: 1px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(6px);
+  font-size: 0.9rem;
+  max-width: calc(100% - 32px);
+}
+
+.user-chip img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-logout {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.16);
+}
+.btn-logout:hover { background: rgba(206,17,38,0.5); }
+
+[hidden] { display: none !important; }
+
+.login-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  margin: 16px 0;
+  color: var(--muted);
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.15);
+  border-top-color: var(--amarillo);
+  animation: spin .8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+#btn-login-retry { margin: 4px auto 0; }
+
+.player-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+@media (max-width: 480px) {
+  .user-chip { top: 10px; right: 10px; }
+  .user-chip span { max-width: 90px; }
+}
+
+/* ---------- Pausa ---------- */
+
+.btn-pause {
+  padding: 6px 14px;
+  font-size: 1rem;
+  line-height: 1;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+}
+.btn-pause:hover { background: rgba(255,255,255,0.16); }
+
+.race-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#race-canvas,
+#race-canvas-3d {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.minimap {
+  position: absolute;
+  top: 12px;
+  right: calc(12px + env(safe-area-inset-right));
+  width: clamp(110px, 18%, 240px);
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(7,12,23,0.55);
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.pause-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(7,12,23,0.62);
+  backdrop-filter: blur(4px);
+  z-index: 5;
+  animation: screenIn .2s ease both;
+}
+
+/* ---------- Controles táctiles ---------- */
+
+.touch-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 calc(14px + env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
+  pointer-events: none;
+  z-index: 3;
+}
+
+.touch-controls[hidden] { display: none !important; }
+
+.touch-group {
+  display: flex;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.touch-btn {
+  width: clamp(64px, 16vmin, 96px);
+  height: clamp(64px, 16vmin, 96px);
+  padding: 0;
+  border-radius: 18px;
+  border: 2px solid rgba(255,255,255,0.35);
+  background: rgba(7,12,23,0.45);
+  color: #fff;
+  font-size: clamp(1.3rem, 5vmin, 2rem);
+  font-weight: 700;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.touch-btn:hover { transform: none; }
+
+.touch-btn.pressed {
+  background: rgba(255,255,255,0.3);
+  border-color: #fff;
+}
+
+.touch-brake,
+.touch-gas {
+  font-family: "Titillium Web", var(--font-body);
+  font-style: italic;
+  font-size: clamp(0.8rem, 3vmin, 1.05rem);
+  letter-spacing: 0.5px;
+}
+
+.touch-brake { border-color: rgba(255,80,80,0.7); }
+.touch-gas {
+  height: clamp(86px, 22vmin, 130px);
+  border-color: rgba(80,230,120,0.75);
+}
+
+/* Con controles táctiles el velocímetro sube al centro para no taparlos. */
+.race-stage.touch .gauge {
+  right: 50%;
+  transform: translateX(50%);
+  width: clamp(130px, 22%, 260px);
+}
+
+.pause-card {
+  background: var(--panel);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 28px 32px;
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.pause-card h2 { font-size: 2rem; color: var(--amarillo); margin-bottom: 4px; }
+
+.pause-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.pause-warning { margin: 0; color: var(--text); font-size: 0.95rem; }
+
+.pause-hint { margin: 18px 0 0; font-size: 0.8rem; }

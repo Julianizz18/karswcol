@@ -17,6 +17,23 @@ npm start
 Abre `http://localhost:3000` en dos o más pestañas/navegadores para probar
 la sincronización multijugador.
 
+### Login con Google
+
+El juego exige iniciar sesión con Google antes de entrar al menú. Para
+habilitarlo:
+
+1. En https://console.cloud.google.com/apis/credentials crea un
+   **ID de cliente de OAuth** de tipo **Aplicación web**.
+2. En **Orígenes de JavaScript autorizados** agrega `http://localhost:3000`
+   (y la URL pública si se despliega).
+3. Copia `server/.env.example` a `server/.env` y pon el Client ID en
+   `GOOGLE_CLIENT_ID`.
+4. `npm start` (lee `server/.env` automáticamente).
+
+El servidor valida el ID token de Google y emite una cookie de sesión
+HttpOnly firmada; el WebSocket rechaza (código 4401) a quien no tenga
+sesión. Pruebas: `cd server && npm test`.
+
 ### Con Docker Compose
 
 ```
@@ -68,13 +85,15 @@ Implementado:
   desde el lobby (`server/src/game-engine/trackCatalog.js`): Costa de
   Cartagena (Caribe), Altiplano de Bogotá (Andina), Eje Cafetero (Andina —
   zona cafetera), Llanos Orientales (Orinoquía) y Selva Amazónica
-  (Amazonía). Cada una varía tamaño, forma, ancho de carretera y número de
-  puntos de control, y tiene su propia paleta de colores.
+  (Amazonía). Cada una es un circuito tipo Fórmula 1 inspirado en un
+  trazado real (Monza, Mónaco, Suzuka, Silverstone e Interlagos), con
+  rectas, chicanas, horquillas y curvas rápidas, su propio ancho de
+  carretera y su propia paleta de colores.
 - Colisión real del kart contra el borde de la carretera (antes el único
   límite físico era el canvas completo, así que un kart podía cortar por el
   césped y nunca volver a pasar por los puntos de control — por eso a veces
-  "no se detectaba" la vuelta). Ahora el motor confina al kart dentro del
-  anillo de la pista y le quita velocidad al rozar el borde.
+  "no se detectaba" la vuelta). Ahora el motor confina al kart dentro de
+  la carretera y le quita velocidad al rozar el borde.
 - Objetos recogibles con identidad colombiana: tinto, arepa, aguapanela,
   lechona, tamal y buñuelo, cada uno con su propio ícono.
 - Aviso inmediato (toast) cada vez que el servidor confirma que un jugador

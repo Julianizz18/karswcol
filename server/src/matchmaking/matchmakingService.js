@@ -15,8 +15,8 @@ export class MatchmakingService {
     return this.players.size < ROOM_CAPACITY;
   }
 
-  join(id, name, color) {
-    this.players.set(id, { id, name, color, ready: false });
+  join(id, name, color, avatar = '') {
+    this.players.set(id, { id, name, color, avatar, ready: false });
   }
 
   leave(id) {

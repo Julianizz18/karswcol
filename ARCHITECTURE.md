@@ -50,12 +50,49 @@ que no existe.
   cliente quedan resueltos sin condición de carrera real en el proceso.
 - **Difusión por WebSocket cada tick**, no por solicitud del cliente, para
   que ningún jugador tome decisiones sobre un estado desactualizado.
-- **Colisión con el borde de pista** (`GameEngine.confineToRoad`): cada
-  pista es un anillo elíptico; el motor proyecta la posición del kart de
-  vuelta al anillo cuando se sale, y le quita velocidad al golpear el
-  borde. Esto es lo que garantiza que un jugador no pueda cortar por fuera
-  del trazado y saltarse puntos de control — la causa real de que antes
-  una vuelta pudiera no detectarse.
+- **Pistas tipo Fórmula 1** (`game-engine/trackBuilder.js` y
+  `trackCatalog.js`): cada circuito se describe como una secuencia de
+  rectas y curvas (radio y ángulo), inspirada en un trazado real (Monza,
+  Mónaco, Suzuka, Silverstone, Interlagos). El constructor cierra el
+  circuito de forma exacta y genera la línea central muestreada cada 4
+  unidades; de ella salen los puntos de control, los objetos, la parrilla
+  y la velocidad recomendada en cada punto. Los clientes reciben una línea
+  central liviana y dibujan exactamente la misma pista en 2D y 3D.
+- **Clima real por pista** (`server/src/weather/weatherService.js`): cada
+  pista se asocia a una ciudad de su región (Cartagena, Bogotá, Manizales,
+  Villavicencio, Leticia). El servidor consulta el clima actual en
+  Open-Meteo (gratuito, sin clave; solo se envían esas coordenadas) cada 10
+  minutos, en una sola petición, y lo traduce a sol, nubes, niebla, llovizna,
+  lluvia o tormenta, de día o de noche. Si la consulta falla reintenta a los
+  30 s y, mientras tanto, cada pista usa su clima típico. El lobby muestra el
+  clima y la vista 3D lo ambienta (sombras con sol, nubes, lluvia,
+  relámpagos, noche con estrellas y postes de luz). Es solo visual: la
+  lluvia que afecta el agarre sigue siendo el evento de carrera (HU04).
+- **Lluvia, pista mojada y charcos** (`game-engine/puddles.js`): con
+  lluvia (el aguacero de la carrera o porque llueve de verdad en la región,
+  en cuyo caso la carrera arranca mojada) baja el agarre en toda la pista y
+  se llenan 12 charcos con posiciones fijas por pista, sobre todo en zonas de
+  frenado. Pisar uno a velocidad provoca aquaplaning (30% del agarre); al
+  parar de llover se secan poco a poco. El servidor manda el nivel de cada
+  charco en el estado de carrera y los clientes solo lo dibujan.
+- **Hora del día**: en el lobby se elige Día, Noche u Hora real (la de la
+  región); aplica a toda la sala, igual que la dificultad de los bots.
+- **Agarre y frenado** (`GameEngine.step`, constantes en
+  `gameplayConfig.js`): el volante gira el kart, pero su trayectoria solo
+  cambia `GRIP / velocidad` por tick (límite de aceleración lateral). Entrar
+  muy rápido a una curva hace que el kart apunte hacia adentro mientras se
+  desliza hacia afuera (derrape) hasta el muro; un golpe fuerte lo deja casi
+  detenido y sin acelerador por 0,6 s. Los frenos son mucho más fuertes que
+  el acelerador y la aceleración es progresiva, así que frenar antes de cada
+  curva lenta es obligatorio. Con lluvia baja el agarre. Una prueba
+  automática verifica en cada pista que entrar a fondo a su curva más lenta
+  termina en choque y que frenando no.
+- **Colisión con el borde de pista** (`GameEngine.confineToRoad`): el
+  motor ubica al kart sobre la línea central (buscando solo cerca de su
+  última posición, para no confundirlo con un tramo paralelo) y, si su
+  distancia lateral supera medio ancho de pista, lo devuelve al borde y le
+  quita velocidad. Esto garantiza que nadie corte camino y se salte puntos
+  de control.
 
 ## Bots y dificultad
 
@@ -63,8 +100,9 @@ Cuando la sala activa "completar con bots" en el lobby, `RaceRoom.spawnBots`
 agrega jugadores artificiales hasta llegar a `BOT_FILL_TARGET` (6)
 participantes, sin quitar nunca jugadores reales de más. En cada tick, si el
 jugador es un bot, `computeBotInput` (Bot Driver) calcula hacia dónde girar
-usando el mismo dato que ya existe para la navegación humana: el siguiente
-checkpoint de la pista activa. La dificultad (`server/src/game-engine/difficulty.js`)
+siguiendo la línea central de la pista activa: apunta a un punto más
+adelante del trazado (más lejos cuanto más rápido va) y frena cuando supera
+la velocidad recomendada para la curva que viene. La dificultad (`server/src/game-engine/difficulty.js`)
 es una configuración de sala, no por bot — la elige cualquier jugador en el
 lobby y aplica a todos los bots de esa carrera por igual.
 

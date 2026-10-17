@@ -10,6 +10,8 @@ const Gamepad = (() => {
 
   let inputHandler = null;
   let statusHandler = null;
+  let pauseHandler = null;
+  let startWasPressed = false;
   let connectedId = null;
   let lastSent = null;
   let rafHandle = null;
@@ -47,6 +49,11 @@ const Gamepad = (() => {
         up: pressed(pad.buttons[7]) || pressed(pad.buttons[0]), // R2 o Cross/A
         down: pressed(pad.buttons[6]) || pressed(pad.buttons[2]) // L2 o Square/X
       };
+      // Options (PS4) / Start (Xbox): solo al presionar, no mientras se mantiene.
+      const startPressed = pressed(pad.buttons[9]);
+      if (startPressed && !startWasPressed && pauseHandler) pauseHandler();
+      startWasPressed = startPressed;
+
       const key = `${input.left}${input.right}${input.up}${input.down}`;
       if (key !== lastSent) {
         lastSent = key;
@@ -57,9 +64,10 @@ const Gamepad = (() => {
     rafHandle = requestAnimationFrame(loop);
   }
 
-  function start(onInput, onStatus) {
+  function start(onInput, onStatus, onPause) {
     inputHandler = onInput;
     statusHandler = onStatus;
+    pauseHandler = onPause || null;
     if (!rafHandle) rafHandle = requestAnimationFrame(loop);
   }
 
