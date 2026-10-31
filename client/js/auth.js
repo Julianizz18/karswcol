@@ -27,6 +27,8 @@ const Auth = (() => {
     const avatar = document.getElementById('user-avatar');
     avatar.hidden = !u.picture;
     if (u.picture) avatar.src = u.picture;
+    const firstName = (u.name || '').trim().split(/\s+/)[0];
+    document.getElementById('menu-greeting').textContent = firstName ? `Hola, ${firstName}` : 'Hola';
     const nameInput = document.getElementById('name-input');
     if (!nameInput.value) nameInput.value = (u.name || '').slice(0, 20);
     Router.show('menu');
@@ -83,10 +85,10 @@ const Auth = (() => {
     google.accounts.id.renderButton(container, {
       theme: 'filled_black',
       size: 'large',
-      shape: 'pill',
+      shape: 'rectangular',
       text: 'signin_with',
       locale: 'es',
-      width: Math.min(320, container.clientWidth || 320)
+      width: 300
     });
     setLoading(null);
     formEl.hidden = false;

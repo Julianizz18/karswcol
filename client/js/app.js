@@ -4,38 +4,157 @@
   let selectedColor = KART_COLORS[0];
   let vehicleIndex = 0;
 
-  const vehicleImage = document.getElementById('vehicle-image');
-  const vehicleName = document.getElementById('vehicle-name');
-  const vehicleDots = document.getElementById('vehicle-dots');
+  // Ficha de cada vehículo en el garaje. Es solo ambientación: todos corren
+  // con la misma física en el servidor.
+  const VEHICLE_SHEETS = {
+    '#CE1126': { plate: 'TMB 001', city: 'Bogotá D.C.', type: 'Bus articulado', tagline: 'Rojo, articulado y con carril exclusivo.' },
+    '#FCD116': { plate: 'TAX 002', city: 'Bogotá D.C.', type: 'Sedán de servicio', tagline: 'Se sabe todos los atajos de la ciudad.' },
+    '#95A5A6': { plate: 'BUR 003', city: 'Boyacá', type: 'Semoviente', tagline: 'El todoterreno original de las montañas.' },
+    '#ECF0F1': { plate: 'HK 2026', city: 'El Dorado', type: 'Aeronave', tagline: 'Aterrizó en la pista equivocada y se quedó.' },
+    '#2ECC71': { plate: 'MED 005', city: 'Medellín', type: 'Tren urbano', tagline: 'Puntual, impecable y orgullo paisa.' }
+  };
 
-  function renderVehicleShowcase() {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const garage = document.getElementById('vehicle-showcase');
+  const vehicleImage = document.getElementById('vehicle-image');
+  const vehicleInfo = document.querySelector('.ficha-info');
+  const vehiclePlate = vehicleInfo.querySelector('.plate');
+  const roadLines = garage.querySelector('.road-lines');
+  const vehicleDots = document.getElementById('vehicle-dots');
+  let vehicleSwap = 0; // descarta animaciones viejas si el jugador cambia rápido
+  let roadOffset = 0;
+
+  function renderVehicleText() {
     selectedColor = KART_COLORS[vehicleIndex];
-    vehicleImage.src = KART_VEHICLE_IMAGES[selectedColor] || '';
-    vehicleImage.alt = KART_VEHICLE_NAMES[selectedColor] || '';
-    vehicleName.textContent = KART_VEHICLE_NAMES[selectedColor] || '';
+    const name = KART_VEHICLE_NAMES[selectedColor] || '';
+    const sheet = VEHICLE_SHEETS[selectedColor] || {};
+    vehicleImage.alt = name;
+    document.getElementById('vehicle-name').textContent = name;
+    document.getElementById('vehicle-tagline').textContent = sheet.tagline || '';
+    document.getElementById('vehicle-plate-code').textContent = sheet.plate || '';
+    document.getElementById('vehicle-plate-city').textContent = sheet.city || '';
+    document.getElementById('vehicle-type').textContent = sheet.type || '';
+    document.getElementById('vehicle-origin').textContent = sheet.city || '';
+    document.getElementById('vehicle-count').textContent =
+      `${String(vehicleIndex + 1).padStart(2, '0')} / ${String(KART_COLORS.length).padStart(2, '0')}`;
+    garage.style.setProperty('--tint', selectedColor);
     vehicleDots.querySelectorAll('button').forEach((dot, i) => {
-      dot.classList.toggle('selected', i === vehicleIndex);
+      dot.setAttribute('aria-checked', String(i === vehicleIndex));
+      dot.tabIndex = i === vehicleIndex ? 0 : -1;
     });
+  }
+
+  // Las líneas del eje corren hacia atrás mientras cambia el vehículo, como
+  // si la cámara lo siguiera por la vía.
+  function driveRoad(dir) {
+    const from = roadOffset;
+    roadOffset -= dir * 64 * 9; // múltiplo del patrón para no dar saltos
+    roadLines.animate(
+      [{ backgroundPosition: `${from}px 0` }, { backgroundPosition: `${roadOffset}px 0` }],
+      { duration: 1000, easing: 'cubic-bezier(0.45, 0, 0.2, 1)', fill: 'forwards' }
+    );
+  }
+
+  // Los sprites miran hacia la derecha: al avanzar, el vehículo actual sale
+  // manejando por la derecha y el siguiente entra por la izquierda.
+  async function selectVehicle(index, dir) {
+    if (index === vehicleIndex) return;
+    vehicleIndex = (index + KART_COLORS.length) % KART_COLORS.length;
+    const token = ++vehicleSwap;
+    const src = KART_VEHICLE_IMAGES[KART_COLORS[vehicleIndex]] || '';
+
+    if (reduceMotion.matches || !vehicleImage.animate) {
+      vehicleImage.src = src;
+      renderVehicleText();
+      return;
+    }
+
+    vehicleImage.getAnimations().forEach(a => a.cancel());
+    driveRoad(dir);
+    // Sale del todo por el borde de la vía (el garaje recorta lo que sobra).
+    const distance = garage.clientWidth * dir;
+    const exit = vehicleImage.animate(
+      [
+        { transform: 'translateX(0)', filter: 'blur(0)' },
+        { transform: `translateX(${distance}px)`, filter: 'blur(4px)' }
+      ],
+      { duration: 380, easing: 'cubic-bezier(0.55, 0, 0.8, 0.25)', fill: 'forwards' }
+    );
+    vehicleInfo.animate(
+      [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(6px)' }],
+      { duration: 200, easing: 'ease-in', fill: 'forwards' }
+    );
+
+    await exit.finished.catch(() => {});
+    if (token !== vehicleSwap) return;
+    vehicleImage.src = src;
+    await vehicleImage.decode().catch(() => {});
+    if (token !== vehicleSwap) return;
+    renderVehicleText();
+
+    vehicleImage.getAnimations().forEach(a => a.cancel());
+    vehicleImage.animate(
+      [
+        { transform: `translateX(${-distance}px)`, filter: 'blur(4px)' },
+        { transform: 'translateX(0)', filter: 'blur(0)' }
+      ],
+      { duration: 760, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }
+    );
+    vehicleInfo.getAnimations().forEach(a => a.cancel());
+    vehicleInfo.animate(
+      [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }],
+      { duration: 600, delay: 120, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'backwards' }
+    );
+    // La placa "cae" en su sitio, como cuando la atornillan.
+    vehiclePlate.animate(
+      [{ transform: 'perspective(400px) rotateX(-80deg)', transformOrigin: 'top' }, { transform: 'perspective(400px) rotateX(0)', transformOrigin: 'top' }],
+      { duration: 700, delay: 80, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)', fill: 'backwards' }
+    );
+  }
+
+  function stepVehicle(dir) {
+    selectVehicle(vehicleIndex + dir, dir);
   }
 
   KART_COLORS.forEach((c, i) => {
     const dot = document.createElement('button');
     dot.type = 'button';
+    dot.className = 'swatch-btn';
+    dot.setAttribute('role', 'radio');
+    dot.setAttribute('aria-label', KART_VEHICLE_NAMES[c] || '');
     dot.title = KART_VEHICLE_NAMES[c] || '';
-    dot.addEventListener('click', () => { vehicleIndex = i; renderVehicleShowcase(); });
+    dot.style.setProperty('--c', c);
+    dot.addEventListener('click', () => selectVehicle(i, i > vehicleIndex ? 1 : -1));
     vehicleDots.appendChild(dot);
   });
 
-  document.getElementById('vehicle-prev').addEventListener('click', () => {
-    vehicleIndex = (vehicleIndex - 1 + KART_COLORS.length) % KART_COLORS.length;
-    renderVehicleShowcase();
+  document.getElementById('vehicle-prev').addEventListener('click', () => stepVehicle(-1));
+  document.getElementById('vehicle-next').addEventListener('click', () => stepVehicle(1));
+
+  // Deslizar con el dedo (o arrastrar con el mouse) sobre el vehículo.
+  const garageStage = garage.querySelector('.garage-stage');
+  let dragStartX = null;
+  garageStage.addEventListener('pointerdown', e => { dragStartX = e.clientX; });
+  garageStage.addEventListener('pointerup', e => {
+    if (dragStartX === null) return;
+    const dx = e.clientX - dragStartX;
+    dragStartX = null;
+    if (Math.abs(dx) > 40) stepVehicle(dx < 0 ? 1 : -1);
   });
-  document.getElementById('vehicle-next').addEventListener('click', () => {
-    vehicleIndex = (vehicleIndex + 1) % KART_COLORS.length;
-    renderVehicleShowcase();
+  garageStage.addEventListener('pointercancel', () => { dragStartX = null; });
+
+  function isScreenActive(name) {
+    return document.getElementById(`screen-${name}`).classList.contains('active');
+  }
+
+  window.addEventListener('keydown', e => {
+    if (!isScreenActive('join') || e.target instanceof HTMLInputElement) return;
+    if (e.code === 'ArrowLeft') stepVehicle(-1);
+    else if (e.code === 'ArrowRight') stepVehicle(1);
   });
 
-  renderVehicleShowcase();
+  vehicleImage.src = KART_VEHICLE_IMAGES[KART_COLORS[vehicleIndex]] || '';
+  renderVehicleText();
 
   const TRACK_IMAGES = {
     caribe: 'img/track-caribe.png',
@@ -49,6 +168,7 @@
   const trackName = document.getElementById('track-name');
   const trackRegion = document.getElementById('track-region');
   let knownTracks = [];
+  let shownTrackId = null;
 
   function renderTrackPicker(tracks, selectedTrackId) {
     knownTracks = tracks;
@@ -79,6 +199,20 @@
     const selected = tracks.find(t => t.id === selectedTrackId) || tracks[0];
     if (selected) {
       const image = TRACK_IMAGES[selected.id];
+      if (selected.id !== shownTrackId) {
+        // Solo se anima cuando cambia la pista, no en cada actualización del lobby.
+        if (shownTrackId && trackImage.animate && !reduceMotion.matches) {
+          trackImage.animate(
+            [{ opacity: 0, transform: 'scale(1.06)', filter: 'blur(6px)' }, { opacity: 1, transform: 'none', filter: 'blur(0)' }],
+            { duration: 700, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }
+          );
+          document.querySelector('.track-meta').animate(
+            [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }],
+            { duration: 550, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }
+          );
+        }
+        shownTrackId = selected.id;
+      }
       trackImage.src = image || '';
       trackImage.alt = selected.name;
       trackName.textContent = selected.name;
@@ -145,14 +279,19 @@
   document.getElementById('track-prev').addEventListener('click', () => stepTrack(-1));
   document.getElementById('track-next').addEventListener('click', () => stepTrack(1));
 
-  /** Botones de opción (dificultad, hora del día): cualquier jugador elige y aplica a la sala. */
+  /**
+   * Control segmentado (dificultad, hora del día): cualquier jugador elige y
+   * aplica a la sala. El indicador se desliza por CSS según --index/--count.
+   */
   function renderPillPicker(containerId, options, selected, onPick) {
     const container = document.getElementById(containerId);
-    const alreadyBuilt = container.children.length === options.length &&
-      [...container.children].every((btn, i) => btn.dataset.id === options[i].id);
+    const buttons = [...container.querySelectorAll('button')];
+    const alreadyBuilt = buttons.length === options.length &&
+      buttons.every((btn, i) => btn.dataset.id === options[i].id);
 
     if (!alreadyBuilt) {
-      container.innerHTML = '';
+      container.innerHTML = '<span class="segmented-thumb" aria-hidden="true"></span>';
+      container.style.setProperty('--count', options.length);
       options.forEach(o => {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -163,17 +302,19 @@
       });
     }
 
+    const selectedIndex = options.findIndex(o => o.id === selected);
+    container.style.setProperty('--index', Math.max(0, selectedIndex));
+    container.classList.toggle('has-selection', selectedIndex >= 0);
     container.querySelectorAll('button').forEach(btn => {
       btn.classList.toggle('selected', btn.dataset.id === selected);
+      btn.setAttribute('aria-pressed', String(btn.dataset.id === selected));
     });
   }
 
   let fillWithBots = false;
 
   function updateBotsButton() {
-    const btn = document.getElementById('btn-toggle-bots');
-    btn.classList.toggle('active', fillWithBots);
-    btn.textContent = fillWithBots ? '🤖 Bots activados' : '🤖 Completar con bots';
+    document.getElementById('btn-toggle-bots').setAttribute('aria-checked', String(fillWithBots));
   }
 
   function showToast(text) {
@@ -230,30 +371,47 @@
 
     Net.on('lobby_update', msg => {
       const list = document.getElementById('lobby-players');
+      // Solo se anima la entrada de pilotos nuevos, no cada actualización.
+      const previousIds = new Set([...list.children].map(li => li.dataset.id));
       list.innerHTML = '';
-      msg.players.forEach(p => {
+      msg.players.forEach((p, i) => {
         const li = document.createElement('li');
+        li.dataset.id = p.id;
+        const gridSlot = document.createElement('span');
+        gridSlot.className = 'player-grid';
+        gridSlot.textContent = `P${i + 1}`;
+        if (previousIds.has(p.id)) li.style.animation = 'none';
+        li.style.setProperty('--c', p.color || '#FCD116');
         // El nombre lo escribe el jugador: se inserta como texto, nunca como HTML.
-        const nameCell = document.createElement('span');
-        const swatch = document.createElement('span');
-        swatch.className = 'swatch';
-        swatch.style.background = p.color || '#FCD116';
-        nameCell.append(swatch);
+        let badge;
         if (p.avatar) {
-          const avatar = document.createElement('img');
-          avatar.className = 'player-avatar';
-          avatar.src = p.avatar;
-          avatar.alt = '';
-          avatar.referrerPolicy = 'no-referrer';
-          nameCell.append(avatar);
+          badge = document.createElement('img');
+          badge.className = 'player-avatar';
+          badge.src = p.avatar;
+          badge.alt = '';
+          badge.referrerPolicy = 'no-referrer';
+        } else {
+          badge = document.createElement('span');
+          badge.className = 'player-initial';
+          badge.textContent = (p.name || '?').trim().charAt(0).toUpperCase();
         }
-        nameCell.append(`${p.name}${p.id === selfId ? ' (tú)' : ''}`);
+        const nameCell = document.createElement('span');
+        nameCell.className = 'player-name';
+        nameCell.textContent = p.name;
+        if (p.id === selfId) {
+          const you = document.createElement('span');
+          you.className = 'you-tag';
+          you.textContent = 'Tú';
+          nameCell.append(you);
+        }
         const status = document.createElement('span');
-        if (p.ready) status.className = 'ready-tag';
-        status.textContent = p.ready ? 'Listo' : 'Esperando...';
-        li.append(nameCell, status);
+        status.className = p.ready ? 'player-status ready-tag' : 'player-status';
+        status.textContent = p.ready ? 'Listo' : 'Esperando';
+        li.append(gridSlot, badge, nameCell, status);
         list.appendChild(li);
       });
+      const readyCount = msg.players.filter(p => p.ready).length;
+      document.getElementById('lobby-count').textContent = `${readyCount} de ${msg.players.length} listos`;
 
       if (msg.tracks) renderTrackPicker(msg.tracks, msg.selectedTrackId);
       if (msg.difficulties) {
@@ -269,7 +427,29 @@
     });
 
     Net.on('countdown', msg => {
-      document.getElementById('countdown').textContent = msg.seconds > 0 ? msg.seconds : '¡Ya!';
+      // Semáforo de salida: se enciende una luz roja por segundo (3, 2, 1) y
+      // en cero todas pasan a verde.
+      const el = document.getElementById('countdown');
+      let lights = el.querySelector('.semaforo');
+      let value = el.querySelector('.countdown-value');
+      if (!lights) {
+        lights = document.createElement('div');
+        lights.className = 'semaforo';
+        lights.append(...[0, 1, 2].map(() => document.createElement('i')));
+        value = document.createElement('span');
+        value.className = 'countdown-value';
+        el.replaceChildren(lights, value);
+      }
+      const lit = msg.seconds > 0 ? Math.max(0, 4 - msg.seconds) : 3;
+      lights.querySelectorAll('i').forEach((lamp, i) => lamp.classList.toggle('on', i < lit));
+      lights.classList.toggle('go', msg.seconds <= 0);
+      value.textContent = msg.seconds > 0 ? msg.seconds : '¡Ya!';
+      if (value.animate && !reduceMotion.matches) {
+        value.animate(
+          [{ opacity: 0, transform: 'translateY(30px)' }, { opacity: 1, transform: 'none' }],
+          { duration: 500, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }
+        );
+      }
     });
 
     Net.on('pause', msg => {
@@ -279,6 +459,7 @@
 
     Net.on('race_start', msg => {
       Hud.reset();
+      document.getElementById('countdown').replaceChildren();
       lastCrashed = false;
       setPauseOverlay(false);
       Race.setTrack(msg.track, msg.weather);
@@ -323,12 +504,32 @@
       setPauseOverlay(false);
       const list = document.getElementById('results-list');
       list.innerHTML = '';
-      msg.ranking.forEach(r => {
+      msg.ranking.forEach((r, i) => {
         const li = document.createElement('li');
-        const time = r.finishTimeMs != null ? `${(r.finishTimeMs / 1000).toFixed(2)}s` : 'No terminó';
-        li.textContent = `${r.name} — ${time}`;
+        if (r.finishTimeMs == null) li.classList.add('dnf');
+        const pos = document.createElement('span');
+        pos.className = 'result-pos';
+        pos.textContent = String(r.position || i + 1).padStart(2, '0');
+        const name = document.createElement('span');
+        name.className = 'result-name';
+        name.textContent = r.name;
+        if (r.id === selfId) {
+          const you = document.createElement('span');
+          you.className = 'you-tag';
+          you.textContent = 'Tú';
+          name.append(you);
+        }
+        const time = document.createElement('span');
+        time.className = 'result-time';
+        time.textContent = r.finishTimeMs != null ? `${(r.finishTimeMs / 1000).toFixed(2)} s` : 'No terminó';
+        li.append(pos, name, time);
         list.appendChild(li);
       });
+      const mine = msg.ranking.find(r => r.id === selfId);
+      document.getElementById('results-title').textContent =
+        !mine || mine.finishTimeMs == null ? 'Resultados'
+          : mine.position === 1 ? 'Ganaste'
+            : `Llegaste ${mine.position}.º`;
       Router.show('results');
     });
 
@@ -364,14 +565,18 @@
     Net.send('toggle_bots', { enabled: !fillWithBots });
   });
 
-  document.getElementById('btn-ready').addEventListener('click', () => {
+  const readyBtn = document.getElementById('btn-ready');
+  readyBtn.addEventListener('click', () => {
     Net.send('ready');
-    document.getElementById('btn-ready').disabled = true;
+    readyBtn.disabled = true;
+    readyBtn.textContent = 'Esperando al resto…';
   });
 
   document.getElementById('btn-back-lobby').addEventListener('click', () => {
     Net.send('restart');
-    document.getElementById('btn-ready').disabled = false;
+    readyBtn.disabled = false;
+    readyBtn.textContent = 'Estoy listo';
+    document.getElementById('countdown').replaceChildren();
     Router.show('lobby');
   });
 

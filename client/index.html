@@ -3,154 +3,281 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
 <title>KARSWCOL</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%2233%22 fill=%22%23FCD116%22/><rect y=%2233%22 width=%22100%22 height=%2233%22 fill=%22%23003893%22/><rect y=%2266%22 width=%22100%22 height=%2234%22 fill=%22%23CE1126%22/></svg>" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Rubik:wght@400;500;600;700&family=Titillium+Web:ital,wght@0,600;0,700;1,600;1,700;1,900&display=swap" rel="stylesheet" />
+<!-- Inter (con itálica) como respaldo de SF Pro fuera de Apple; Bungee, Rubik y
+     Titillium se siguen cargando porque los dibujan los canvas de la carrera. -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..900;1,14..32,400..900&family=Bungee&family=Rubik:wght@400;500;600;700&family=Titillium+Web:ital,wght@0,600;0,700;1,600;1,700;1,900&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="css/style.css" />
 </head>
-<body>
+<body data-screen="login">
 
-<div id="screen-login" class="screen active">
-  <div class="menu-hero login-hero">
-    <div class="hero-flag-band"></div>
-    <div class="hero-art" role="img" aria-label="KARSWCOL: karts de personajes colombianos en una pista arcoíris"></div>
-    <div class="hero-content">
-      <div class="hero-badge"><span class="flag-dots"><i></i><i></i><i></i></span> Carreras 2D en tiempo real</div>
-      <div id="login-loading" class="login-loading" role="status">
-        <span class="spinner" aria-hidden="true"></span>
-        <span id="login-loading-text">Verificando sesión…</span>
-      </div>
-      <div id="login-form" hidden>
-        <h2 class="login-title">Inicia sesión para correr</h2>
-        <p class="tagline">Usa tu cuenta de Google para entrar a la pista. Solo usamos tu nombre y tu foto.</p>
-        <div id="google-signin" class="google-signin"></div>
-      </div>
-      <p id="login-error" class="error" role="alert"></p>
-      <button id="btn-login-retry" type="button" class="btn-secondary" hidden>Reintentar</button>
-    </div>
-  </div>
-</div>
-
-<div id="screen-menu" class="screen">
-  <div class="menu-hero">
+<header class="globalnav" id="globalnav">
+  <div class="globalnav-inner">
+    <button class="wordmark" type="button" data-nav="menu" aria-label="Inicio">KARSWCOL</button>
+    <nav class="globalnav-links" aria-label="Principal">
+      <button type="button" data-nav="join"><span>01</span>Jugar</button>
+      <button type="button" data-nav="help"><span>02</span>Cómo se juega</button>
+      <button type="button" data-nav="credits"><span>03</span>Créditos</button>
+    </nav>
     <div id="user-chip" class="user-chip" hidden>
       <img id="user-avatar" alt="" referrerpolicy="no-referrer" />
       <span id="user-name"></span>
-      <button id="btn-logout" type="button" class="btn-logout">Cerrar sesión</button>
-    </div>
-    <div class="hero-flag-band"></div>
-    <div class="hero-art" role="img" aria-label="KARSWCOL: karts de personajes colombianos en una pista arcoíris"></div>
-    <div class="hero-content">
-      <div class="hero-badge"><span class="flag-dots"><i></i><i></i><i></i></span> Carreras 2D en tiempo real</div>
-      <p class="tagline">Ponle acento paisa, rolo o costeño a tus vueltas — pistas con sabor colombiano, karts sin fronteras.</p>
-      <nav class="menu-nav">
-        <button class="btn-primary" data-nav="join"><span>🏁</span> Jugar</button>
-        <button class="btn-secondary" data-nav="help"><span>❓</span> Cómo jugar</button>
-        <button class="btn-secondary" data-nav="credits"><span>👥</span> Créditos</button>
-      </nav>
+      <button id="btn-logout" type="button" class="btn-logout">Salir</button>
     </div>
   </div>
-</div>
+</header>
 
-<div id="screen-help" class="screen">
-  <div class="panel">
-    <h2>Cómo jugar</h2>
-    <ul class="help-list">
-      <li>W / S para acelerar / frenar, A / D para girar (también sirven las flechas). C cambia la cámara y Esc (o el botón ⏸) pausa la carrera para todos. O usa un control PS4/Xbox conectado: stick para girar, R2/X para acelerar, L2/Cuadrado para frenar, Options/Start para pausar.</li>
-      <li>Completa 3 vueltas pasando por los puntos de control en orden.</li>
-      <li>Si faltan jugadores, actívalo en el lobby: la sala se completa con bots hasta tener una carrera decente, con la dificultad que elijas.</li>
-      <li>Recoge tinto, arepa, aguapanela y otras delicias para un boost de velocidad.</li>
-      <li>Elige la pista en el lobby: cada región de Colombia tiene su propio trazado.</li>
-      <li>El servidor decide la posición real de cada kart: lo que ves ya fue validado por él.</li>
-    </ul>
-    <button data-nav="menu" class="btn-back">Volver</button>
-  </div>
-</div>
+<!-- Cortina entre pantallas: un tramo de vía que pasa de izquierda a derecha. -->
+<div class="lane-wipe" id="lane-wipe" aria-hidden="true"><i></i></div>
 
-<div id="screen-credits" class="screen">
-  <div class="panel">
-    <h2>Créditos</h2>
-    <p><strong>Proyecto:</strong> KARSWCOL — Carreras 2D multijugador en tiempo real</p>
-    <p><strong>Squad:</strong> Gato Dumas</p>
-    <ul class="help-list">
-      <li>Sara Arteaga</li>
-      <li>Johan Beltrán</li>
-      <li>Julian Tinjaca</li>
-    </ul>
-    <p class="muted">Escuela Colombiana de Ingeniería Julio Garavito — ARSW 2026-2</p>
-    <button data-nav="menu" class="btn-back">Volver</button>
-  </div>
-</div>
+<!-- ============ Login ============ -->
+<section id="screen-login" class="screen screen-login active">
+  <div class="wrap login-grid">
+    <div class="login-copy">
+      <p class="kicker reveal" style="--i:0"><span class="shield">KM 0</span>Carreras multijugador</p>
+      <h1 class="title title-xl reveal" style="--i:1">Colombia<br />a toda<br /><em>velocidad</em></h1>
+      <p class="lead reveal" style="--i:2">Cinco regiones, un solo trazado por cada una y el clima que está haciendo allá ahora mismo.</p>
 
-<div id="screen-join" class="screen">
-  <div class="stage-panel">
-    <h2 class="stage-title">Ingresa tu nombre</h2>
-    <input id="name-input" maxlength="20" placeholder="Tu nombre de piloto" />
-
-    <p class="stage-caption">Elige tu vehículo</p>
-    <div class="showcase" id="vehicle-showcase">
-      <button class="showcase-arrow" id="vehicle-prev" type="button" aria-label="Vehículo anterior">‹</button>
-      <div class="showcase-frame">
-        <div class="showcase-glow"></div>
-        <img id="vehicle-image" class="showcase-image" alt="" />
-      </div>
-      <button class="showcase-arrow" id="vehicle-next" type="button" aria-label="Vehículo siguiente">›</button>
-    </div>
-    <h3 id="vehicle-name" class="showcase-name"></h3>
-    <div class="showcase-dots" id="vehicle-dots"></div>
-
-    <button id="btn-enter-lobby">Entrar al lobby</button>
-    <button data-nav="menu" class="btn-back">Volver</button>
-    <p id="join-error" class="error"></p>
-  </div>
-</div>
-
-<div id="screen-lobby" class="screen">
-  <div class="stage-panel stage-panel-wide">
-    <h2 class="stage-title">Lobby</h2>
-    <div class="stage-grid">
-      <div class="stage-main">
-        <p class="stage-caption">Elige la pista</p>
-        <div class="showcase" id="track-showcase">
-          <button class="showcase-arrow" id="track-prev" type="button" aria-label="Pista anterior">‹</button>
-          <div class="showcase-frame">
-            <div class="showcase-glow"></div>
-            <img id="track-image" class="showcase-image" alt="" />
-            <canvas id="track-layout" class="track-layout" width="260" height="190" aria-hidden="true"></canvas>
-          </div>
-          <button class="showcase-arrow" id="track-next" type="button" aria-label="Pista siguiente">›</button>
+      <div class="login-action reveal" style="--i:3">
+        <div id="login-loading" class="login-loading" role="status">
+          <span class="spinner" aria-hidden="true"></span>
+          <span id="login-loading-text">Verificando sesión…</span>
         </div>
-        <h3 id="track-name" class="showcase-name"></h3>
-        <p id="track-region" class="showcase-subtitle"></p>
-        <p id="track-weather" class="track-weather"></p>
-        <p id="track-description" class="track-description"></p>
+        <div id="login-form" hidden>
+          <div id="google-signin" class="google-signin"></div>
+        </div>
+        <p id="login-error" class="error" role="alert"></p>
+        <button id="btn-login-retry" type="button" class="btn btn-secondary" hidden>Reintentar</button>
+      </div>
+      <p class="fineprint reveal" style="--i:4">Entras con Google. Solo usamos tu nombre y tu foto.</p>
+    </div>
+    <figure class="login-art sign-frame reveal" style="--i:2">
+      <img src="img/menu-bg.jpg" alt="Karts de personajes colombianos sobre una pista arcoíris" />
+    </figure>
+  </div>
+</section>
+
+<!-- ============ Inicio ============ -->
+<section id="screen-menu" class="screen screen-menu">
+  <div class="wrap">
+    <div class="menu-hero">
+      <div>
+        <p class="kicker reveal" style="--i:0"><span class="shield">KM 0</span><span id="menu-greeting">Hola</span></p>
+        <h1 class="title title-xl reveal" style="--i:1">Corre por<br /><em>Colombia</em></h1>
+      </div>
+      <div class="menu-hero-side">
+        <p class="lead reveal" style="--i:2">Del TransMilenio al burro, del Caribe a la Amazonía. Tres vueltas, sin frenar en las curvas equivocadas.</p>
+        <div class="cta-row reveal" style="--i:3">
+          <button class="btn btn-primary btn-large" type="button" data-nav="join">Jugar ahora <span class="btn-arrow" aria-hidden="true">→</span></button>
+          <button class="btn btn-secondary btn-large" type="button" data-nav="help">Cómo se juega</button>
+        </div>
+      </div>
+    </div>
+
+    <figure class="hero-media sign-frame reveal" style="--i:4">
+      <img src="img/menu-bg.jpg" alt="Karts de personajes colombianos sobre una pista arcoíris" />
+    </figure>
+
+    <ul class="markers">
+      <li class="marker reveal" style="--i:5"><span class="marker-km">5</span><span class="marker-label">Vehículos</span><span class="marker-note">Bus, taxi, burro, avión y metro.</span></li>
+      <li class="marker reveal" style="--i:6"><span class="marker-km">5</span><span class="marker-label">Regiones</span><span class="marker-note">Una pista por cada una.</span></li>
+      <li class="marker reveal" style="--i:7"><span class="marker-km">3</span><span class="marker-label">Vueltas</span><span class="marker-note">Con aguaceros y charcos de verdad.</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ Cómo se juega ============ -->
+<section id="screen-help" class="screen screen-page">
+  <div class="wrap">
+    <header class="page-head">
+      <p class="kicker reveal" style="--i:0"><span class="shield">02</span>Manual del piloto</p>
+      <h1 class="title reveal" style="--i:1">Cómo se <em>juega</em></h1>
+    </header>
+    <div class="tiles">
+      <article class="tile sign tile-wide reveal" style="--i:2">
+        <span class="tile-num">01</span>
+        <h3>Controles</h3>
+        <div class="keys">
+          <div class="keycluster" aria-label="W A S D">
+            <kbd class="k-w">W</kbd><kbd class="k-a">A</kbd><kbd class="k-s">S</kbd><kbd class="k-d">D</kbd>
+          </div>
+          <dl class="keylegend">
+            <div><dt>W / S</dt><dd>Acelerar y frenar</dd></div>
+            <div><dt>A / D</dt><dd>Girar (también las flechas)</dd></div>
+            <div><dt>C</dt><dd>Cambiar de cámara</dd></div>
+            <div><dt>Esc</dt><dd>Pausar para todos</dd></div>
+          </dl>
+        </div>
+        <p>¿Control de PS4 o Xbox? Stick para girar, R2 o X para acelerar, L2 o Cuadrado para frenar y Options o Start para pausar.</p>
+      </article>
+      <article class="tile sign tile-accent reveal" style="--i:3">
+        <span class="tile-num">02</span>
+        <p class="tile-big">3</p>
+        <h3>Vueltas</h3>
+        <p>Pasa por los puntos de control en orden. El primero en cerrar la tercera gana.</p>
+      </article>
+      <article class="tile sign reveal" style="--i:4">
+        <span class="tile-num">03</span>
+        <h3>Tinto, arepa y aguapanela</h3>
+        <p>Recógelos en la pista para un empujón de velocidad.</p>
+      </article>
+      <article class="tile sign reveal" style="--i:5">
+        <span class="tile-num">04</span>
+        <h3>¿Faltan pilotos?</h3>
+        <p>Activa los bots en el lobby y elige qué tan duros quieres que sean.</p>
+      </article>
+      <article class="tile sign reveal" style="--i:6">
+        <span class="tile-num">05</span>
+        <h3>Cada región, su pista</h3>
+        <p>Del Caribe a la Amazonía, con el clima que está haciendo allá ahora mismo.</p>
+      </article>
+      <article class="tile sign tile-full reveal" style="--i:7">
+        <span class="tile-num">06</span>
+        <h3>El servidor manda</h3>
+        <p>Cada posición que ves ya fue validada por el servidor. Nadie hace trampa.</p>
+      </article>
+    </div>
+    <button data-nav="menu" type="button" class="btn-link back-link">← Volver al inicio</button>
+  </div>
+</section>
+
+<!-- ============ Créditos ============ -->
+<section id="screen-credits" class="screen screen-page">
+  <div class="wrap">
+    <header class="page-head">
+      <p class="kicker reveal" style="--i:0"><span class="shield">03</span>Créditos · Squad</p>
+      <h1 class="title title-xl reveal" style="--i:1">Gato<br /><em>Dumas</em></h1>
+    </header>
+    <ul class="credits-plates">
+      <li class="plate reveal" style="--i:2"><span class="plate-code">SARA</span><span class="plate-city">Arteaga</span></li>
+      <li class="plate reveal" style="--i:3"><span class="plate-code">JOHAN</span><span class="plate-city">Beltrán</span></li>
+      <li class="plate reveal" style="--i:4"><span class="plate-code">JULIAN</span><span class="plate-city">Tinjaca</span></li>
+    </ul>
+    <p class="fineprint reveal" style="--i:5">Escuela Colombiana de Ingeniería Julio Garavito · ARSW 2026-2</p>
+    <button data-nav="menu" type="button" class="btn-link back-link">← Volver al inicio</button>
+  </div>
+</section>
+
+<!-- ============ Elegir vehículo ============ -->
+<section id="screen-join" class="screen screen-join">
+  <div class="wrap">
+    <header class="page-head">
+      <p class="kicker reveal" style="--i:0"><span class="shield">01</span>Paso 1 de 2 · Garaje</p>
+      <h1 class="title reveal" style="--i:1">Elige tu <em>vehículo</em></h1>
+    </header>
+
+    <div class="garage-grid">
+      <div class="garage reveal" id="vehicle-showcase" style="--i:2">
+        <div class="road" aria-hidden="true"><span class="road-lines"></span></div>
+        <div class="garage-light" aria-hidden="true"></div>
+        <div class="garage-stage">
+          <img id="vehicle-image" class="garage-vehicle" alt="" draggable="false" />
+        </div>
+        <button class="arrow arrow-prev" id="vehicle-prev" type="button" aria-label="Vehículo anterior">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+        </button>
+        <button class="arrow arrow-next" id="vehicle-next" type="button" aria-label="Vehículo siguiente">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+        </button>
+        <p id="vehicle-count" class="garage-count"></p>
+      </div>
+
+      <div class="ficha reveal" style="--i:3">
+        <div class="ficha-info">
+          <div class="plate plate-lg"><span id="vehicle-plate-code" class="plate-code"></span><span id="vehicle-plate-city" class="plate-city"></span></div>
+          <h2 id="vehicle-name" class="ficha-name"></h2>
+          <p id="vehicle-tagline" class="ficha-tagline"></p>
+          <dl class="ficha-specs">
+            <div><dt>Tipo</dt><dd id="vehicle-type"></dd></div>
+            <div><dt>Matrícula</dt><dd id="vehicle-origin"></dd></div>
+          </dl>
+        </div>
+        <div class="swatches" id="vehicle-dots" role="radiogroup" aria-label="Vehículo"></div>
+
+        <div class="join-form">
+          <label class="field">
+            <span>Nombre del piloto</span>
+            <input id="name-input" maxlength="20" autocomplete="nickname" />
+          </label>
+          <button id="btn-enter-lobby" type="button" class="btn btn-primary btn-large btn-block">Continuar al lobby <span class="btn-arrow" aria-hidden="true">→</span></button>
+          <p id="join-error" class="error" role="alert"></p>
+          <button data-nav="menu" type="button" class="btn-link">← Volver</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Lobby ============ -->
+<section id="screen-lobby" class="screen screen-lobby">
+  <div class="wrap">
+    <header class="page-head">
+      <p class="kicker reveal" style="--i:0"><span class="shield">02</span>Paso 2 de 2 · Parrilla</p>
+      <h1 class="title reveal" style="--i:1">Prepara la <em>carrera</em></h1>
+    </header>
+
+    <div class="lobby-grid">
+      <div class="lobby-track reveal" style="--i:2">
+        <div class="track-hero sign-frame" id="track-showcase">
+          <img id="track-image" class="track-hero-img" alt="" />
+          <button class="arrow arrow-prev" id="track-prev" type="button" aria-label="Pista anterior">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+          </button>
+          <button class="arrow arrow-next" id="track-next" type="button" aria-label="Pista siguiente">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+          </button>
+        </div>
+        <div class="track-meta sign">
+          <div class="track-meta-text">
+            <p id="track-region" class="track-region"></p>
+            <h2 id="track-name" class="track-name"></h2>
+            <p id="track-weather" class="track-weather"></p>
+            <p id="track-description" class="track-description"></p>
+          </div>
+          <canvas id="track-layout" class="track-layout" width="260" height="190" aria-hidden="true"></canvas>
+        </div>
         <div id="track-picker" class="track-thumbs"></div>
       </div>
 
-      <div class="stage-side">
-        <p class="muted">Esperando pilotos (mín. 1 para pruebas, ideal 4-8)</p>
-        <ul id="lobby-players" class="player-list"></ul>
+      <aside class="lobby-side reveal" style="--i:3">
+        <div class="panel">
+          <div class="panel-head"><span>Parrilla</span><span id="lobby-count" class="panel-count"></span></div>
+          <ul id="lobby-players" class="player-list"></ul>
+        </div>
+        <p class="panel-foot">Mínimo 1 para pruebas. Lo ideal son de 4 a 8.</p>
 
-        <p class="section-label">Hora del día</p>
-        <div id="time-picker" class="pill-picker"></div>
+        <div class="panel panel-settings">
+          <div class="setting">
+            <span class="setting-label">Hora del día</span>
+            <div id="time-picker" class="segmented"></div>
+          </div>
+          <div class="setting">
+            <span class="setting-label">Dificultad de los bots</span>
+            <div id="difficulty-picker" class="segmented"></div>
+          </div>
+          <div class="setting setting-inline">
+            <label for="btn-toggle-bots">
+              <span class="setting-label">Completar con bots</span>
+              <small>Llena los puestos vacíos de la parrilla.</small>
+            </label>
+            <button id="btn-toggle-bots" class="switch" type="button" role="switch" aria-checked="false"><span class="switch-knob"></span></button>
+          </div>
+        </div>
 
-        <p class="section-label">Dificultad de los bots</p>
-        <div id="difficulty-picker" class="pill-picker"></div>
-
-        <p class="section-label">¿Faltan jugadores?</p>
-        <button id="btn-toggle-bots" class="btn-secondary" type="button">🤖 Completar con bots</button>
-
-        <p id="gamepad-status" class="muted gamepad-status"></p>
-
-        <button id="btn-ready">Estoy listo</button>
-        <div id="countdown" class="countdown"></div>
-      </div>
+        <p id="gamepad-status" class="gamepad-status"></p>
+        <button id="btn-ready" type="button" class="btn btn-primary btn-large btn-block">Estoy listo</button>
+      </aside>
     </div>
   </div>
-</div>
 
+  <div id="countdown" class="countdown" aria-live="assertive"></div>
+</section>
+
+<!-- ============ Carrera ============ -->
 <div id="screen-race" class="screen">
   <div class="race-wrap">
     <div class="hud">
@@ -159,7 +286,9 @@
       <span id="hud-weather"></span>
       <span id="hud-gamepad" class="hud-gamepad"></span>
       <span id="hud-hint">W/S acelerar/frenar · A/D girar · C cámara · Esc pausa</span>
-      <button id="btn-pause" class="btn-pause" type="button" aria-label="Pausar (Esc)" title="Pausar (Esc)">⏸</button>
+      <button id="btn-pause" class="btn-pause" type="button" aria-label="Pausar (Esc)" title="Pausar (Esc)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+      </button>
     </div>
     <div class="race-stage">
       <canvas id="race-canvas" width="1200" height="746"></canvas>
@@ -179,16 +308,17 @@
       </div>
       <div id="pause-overlay" class="pause-overlay" hidden>
         <div class="pause-card" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+          <div class="hazard" aria-hidden="true"></div>
           <h2 id="pause-title">Pausa</h2>
           <p id="pause-by" class="muted"></p>
           <div id="pause-actions" class="pause-actions">
-            <button id="btn-resume" class="btn-primary" type="button">▶ Reanudar</button>
-            <button id="btn-quit-race" class="btn-secondary" type="button">Abandonar carrera</button>
+            <button id="btn-resume" class="btn btn-primary" type="button">Reanudar</button>
+            <button id="btn-quit-race" class="btn btn-secondary" type="button">Abandonar carrera</button>
           </div>
           <div id="pause-confirm" class="pause-actions" hidden>
             <p class="pause-warning">¿Seguro? Saldrás de la carrera y no aparecerás en los resultados.</p>
-            <button id="btn-quit-confirm" class="btn-primary" type="button">Sí, abandonar</button>
-            <button id="btn-quit-cancel" class="btn-secondary" type="button">Cancelar</button>
+            <button id="btn-quit-confirm" class="btn btn-danger" type="button">Sí, abandonar</button>
+            <button id="btn-quit-cancel" class="btn btn-secondary" type="button">Cancelar</button>
           </div>
           <p class="muted pause-hint">Esc para reanudar · La pausa aplica a todos los jugadores</p>
         </div>
@@ -197,15 +327,19 @@
   </div>
 </div>
 
-<div id="toast"></div>
-
-<div id="screen-results" class="screen">
-  <div class="panel wide">
-    <h2>Resultados</h2>
-    <ol id="results-list" class="results-list"></ol>
-    <button id="btn-back-lobby">Volver al lobby</button>
+<!-- ============ Resultados ============ -->
+<section id="screen-results" class="screen screen-results">
+  <div class="wrap wrap-narrow">
+    <header class="page-head">
+      <p class="kicker reveal" style="--i:0"><span class="shield">META</span>Carrera terminada</p>
+      <h1 id="results-title" class="title reveal" style="--i:1">Resultados</h1>
+    </header>
+    <ol id="results-list" class="results-list reveal" style="--i:2"></ol>
+    <button id="btn-back-lobby" type="button" class="btn btn-primary btn-large reveal" style="--i:3">Volver al lobby <span class="btn-arrow" aria-hidden="true">→</span></button>
   </div>
-</div>
+</section>
+
+<div id="toast" role="status"></div>
 
 <script src="https://accounts.google.com/gsi/client" async></script>
 <script src="js/network.js"></script>
