@@ -131,7 +131,35 @@ services:
       - gateway
       - prometheus
 
+  # ---------------------------------------------------------- calidad de código
+  # Tampoco arranca con "docker compose up". Ver README, "Calidad de código":
+  #   docker compose --profile quality up -d sonarqube      -> http://localhost:9000
+  #   docker compose --profile quality run --rm sonar-scanner
+  sonarqube:
+    image: sonarqube:10.7-community
+    profiles: ["quality"]
+    ports:
+      - "9000:9000"
+    environment:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+
+  sonar-scanner:
+    image: sonarsource/sonar-scanner-cli:11.1
+    profiles: ["quality"]
+    environment:
+      SONAR_HOST_URL: http://sonarqube:9000
+      SONAR_TOKEN: ${SONAR_TOKEN:-}
+    volumes:
+      - ./:/usr/src
+    depends_on:
+      - sonarqube
+
 volumes:
+  sonarqube_data:
+  sonarqube_extensions:
   karswcol_pgdata:
   prometheus_data:
   loki_data:

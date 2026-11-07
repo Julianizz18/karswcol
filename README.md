@@ -60,6 +60,24 @@ docker compose --profile loadtest run --rm --service-ports k6 run /scripts/load.
 
 Guía completa, métricas, umbrales y resultados: [`OBSERVABILITY.md`](OBSERVABILITY.md).
 
+## Calidad de código (SonarQube)
+
+SonarQube corre en Docker con el perfil `quality` (no arranca con `docker compose up`):
+
+```bash
+# 1. Levantar SonarQube -> http://localhost:9000 (admin/admin la primera vez)
+docker compose --profile quality up -d sonarqube
+
+# 2. Generar la cobertura de las pruebas del servidor (server/coverage/lcov.info)
+cd server && npm run coverage && cd ..
+
+# 3. Crear un token en SonarQube (My Account > Security > Global Analysis Token),
+#    ponerlo como SONAR_TOKEN en .env y lanzar el análisis
+docker compose --profile quality run --rm sonar-scanner
+```
+
+La configuración del análisis está en `sonar-project.properties`.
+
 ## Estado actual (avance de sprint 1-2)
 
 Implementado:

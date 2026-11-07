@@ -1,12 +1,14 @@
 FROM node:20-alpine
 
-WORKDIR /app
+# Misma estructura que el repo (server/ y client/ hermanos): index.js sirve
+# el cliente desde src/../../client, es decir /app/client.
+WORKDIR /app/server
 
 COPY server/package*.json ./
-RUN npm install --omit=dev
+RUN npm ci --omit=dev
 
 COPY server/src ./src
-COPY client ./client
+COPY client /app/client
 
 ENV PORT=3000
 EXPOSE 3000

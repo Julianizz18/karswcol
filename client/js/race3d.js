@@ -1670,7 +1670,7 @@ function frame(now) {
   }
   updateRain(state.rainActive ? Math.max(1, look.rain) : look.rain, dt);
   updateAtmosphere(me, dt, now);
-  updateWetTrack(state, dt, now);
+  updateWetTrack(state, dt);
   renderer.render(scene, camera);
   drawMinimap(state.players);
 }
