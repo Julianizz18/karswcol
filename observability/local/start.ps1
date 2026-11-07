@@ -159,11 +159,11 @@ $checks = @(
   @{ Name = 'Loki';       Url = 'http://localhost:3100/ready' },
   @{ Name = 'Grafana';    Url = 'http://localhost:3001/api/health' }
 )
-Write-Host "Esperando a que todo responda (Loki y Grafana tardan ~20 s)..." -ForegroundColor Cyan
+Write-Host "Esperando a que todo responda (Grafana puede tardar 1-2 minutos)..." -ForegroundColor Cyan
 $allOk = $true
 foreach ($c in $checks) {
   $ok = $false
-  for ($i = 0; $i -lt 60; $i++) {
+  for ($i = 0; $i -lt 180; $i++) {   # Grafana puede tardar 1-2 min en arrancar
     try {
       $r = Invoke-WebRequest -Uri $c.Url -UseBasicParsing -TimeoutSec 2
       if ($r.StatusCode -eq 200) { $ok = $true; break }
