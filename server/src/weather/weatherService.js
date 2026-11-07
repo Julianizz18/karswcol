@@ -4,6 +4,8 @@
 // los clientes usan para ambientar la pista (sol, nubes, niebla, lluvia,
 // noche). Si la consulta falla o no hay internet, cada pista conserva su
 // clima típico, así el juego nunca depende de un servicio externo.
+import { logger } from '../observability/logger.js';
+import { weatherRefreshes } from '../observability/metrics.js';
 
 const API_URL = 'https://api.open-meteo.com/v1/forecast';
 const REFRESH_MS = 10 * 60 * 1000;
@@ -91,10 +93,12 @@ export class WeatherService {
           updatedAt: now.time
         };
       });
+      weatherRefreshes.inc({ result: 'ok' });
       this.onUpdate();
       return true;
     } catch (err) {
-      console.warn(`Clima: no se pudo consultar Open-Meteo (${err.message}); se reintenta en ${this.retryMs / 1000} s.`);
+      weatherRefreshes.inc({ result: 'error' });
+      logger.warn('weather.refresh_failed', { err: err.message, retryInSeconds: this.retryMs / 1000 });
       if (this.timer && !this.retryTimer) {
         this.retryTimer = setTimeout(() => {
           this.retryTimer = null;

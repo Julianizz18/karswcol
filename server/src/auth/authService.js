@@ -13,7 +13,11 @@ const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 horas
 export function createAuthService({
   clientId = process.env.GOOGLE_CLIENT_ID || '',
   sessionSecret = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
-  verifyIdToken = null
+  verifyIdToken = null,
+  // Solo para pruebas de carga (k6): si se define, POST /api/auth/loadtest
+  // emite sesiones de pilotos sintéticos a quien presente este token. Vacío
+  // (el valor por defecto) = endpoint deshabilitado; nunca definirlo en producción.
+  loadTestToken = process.env.LOAD_TEST_TOKEN || ''
 } = {}) {
   const googleClient = new OAuth2Client(clientId);
 
@@ -67,6 +71,19 @@ export function createAuthService({
     return { user, token: createSession(user) };
   }
 
+  // Sesión de un piloto sintético para k6, sin pasar por Google.
+  function loginForLoadTest(presentedToken, name) {
+    if (!loadTestToken) throw new Error('Las pruebas de carga no están habilitadas.');
+    const expected = Buffer.from(loadTestToken);
+    const given = Buffer.from(String(presentedToken || ''));
+    if (expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) {
+      throw new Error('Token de pruebas de carga inválido.');
+    }
+    const id = crypto.randomBytes(6).toString('hex');
+    const user = { sub: `loadtest-${id}`, email: '', name: String(name || `Bot k6 ${id}`).slice(0, 40), picture: '' };
+    return { user, token: createSession(user) };
+  }
+
   function sessionFromRequest(req) {
     return readSession(parseCookies(req.headers.cookie)[SESSION_COOKIE]);
   }
@@ -78,7 +95,15 @@ export function createAuthService({
     return createSession(user);
   }
 
-  return { clientId, loginWithGoogle, readSession, sessionFromRequest, renewSession };
+  return {
+    clientId,
+    loadTestEnabled: !!loadTestToken,
+    loginWithGoogle,
+    loginForLoadTest,
+    readSession,
+    sessionFromRequest,
+    renewSession
+  };
 }
 
 // Solo se aceptan fotos servidas por Google: la URL termina en el <img> de

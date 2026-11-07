@@ -15,3 +15,6 @@ llanosOrientales.png
 selvaAmazonica.png
 .env
 server/.env
+
+# Binarios portables y datos del modo sin Docker (observability/local/start.ps1)
+tools/

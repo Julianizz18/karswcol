@@ -3,11 +3,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { WebSocketServer } from 'ws';
 import { SESSION_COOKIE, publicUser } from '../auth/authService.js';
+import { logger } from '../observability/logger.js';
+import {
+  register, httpRequestsTotal, httpRequestDuration, wsConnections, wsConnectionsTotal,
+  wsMessagesReceived, wsMessagesSent, wsBytesSent, wsBroadcastDuration, joinRejections
+} from '../observability/metrics.js';
 
 // Connection Gateway (HU01, componente "Connection Gateway" de la sección
 // 4.1). Es el único punto de entrada de red: sirve el cliente estático,
 // acepta conexiones WebSocket y traduce mensajes JSON hacia la sala de
 // carrera. No conoce reglas de juego ni de matchmaking, solo enruta.
+// También expone los endpoints de operación: /health y /metrics (Prometheus).
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -69,6 +75,28 @@ function isSameOrigin(req) {
   }
 }
 
+// Ruta para las etiquetas de métricas: solo valores conocidos, así una URL
+// arbitraria no crea series nuevas en Prometheus (cardinalidad acotada).
+const KNOWN_ROUTES = new Set([
+  '/', '/health', '/metrics',
+  '/api/auth/config', '/api/auth/me', '/api/auth/google', '/api/auth/logout', '/api/auth/loadtest'
+]);
+
+function routeLabel(url, status) {
+  const pathname = String(url || '').split('?')[0];
+  if (KNOWN_ROUTES.has(pathname)) return pathname;
+  if (pathname.startsWith('/api/')) return '/api/other';
+  return status === 404 ? 'not_found' : 'static';
+}
+
+const CLIENT_MESSAGE_TYPES = new Set([
+  'join', 'ready', 'select_track', 'select_time', 'select_difficulty', 'toggle_bots', 'input', 'toggle_pause', 'restart'
+]);
+
+function joinRejectionReason(text) {
+  return /llena/i.test(text) ? 'room_full' : /curso/i.test(text) ? 'race_in_progress' : 'other';
+}
+
 // Rutas de la API de autenticación. Devuelve true si atendió la petición.
 async function handleAuthApi(req, res, auth) {
   const url = req.url.split('?')[0];
@@ -88,9 +116,21 @@ async function handleAuthApi(req, res, auth) {
     try {
       const body = await readJsonBody(req);
       const { user, token } = await auth.loginWithGoogle(body.credential);
+      logger.info('auth.login', { provider: 'google' });
       sendJson(res, 200, { user: publicUser(user) }, { 'Set-Cookie': sessionCookie(req, token, SESSION_MAX_AGE_SECONDS) });
     } catch (err) {
+      logger.warn('auth.login_failed', { provider: 'google', reason: err.message });
       sendJson(res, 401, { error: err.message || 'No se pudo iniciar sesión.' });
+    }
+  } else if (url === '/api/auth/loadtest' && req.method === 'POST' && auth.loadTestEnabled) {
+    // Solo existe si el servidor arrancó con LOAD_TEST_TOKEN (pruebas con k6).
+    try {
+      const body = await readJsonBody(req);
+      const { user, token } = auth.loginForLoadTest(req.headers['x-load-test-token'], body.name);
+      sendJson(res, 200, { user: publicUser(user) }, { 'Set-Cookie': sessionCookie(req, token, SESSION_MAX_AGE_SECONDS) });
+    } catch (err) {
+      logger.warn('auth.login_failed', { provider: 'loadtest', reason: err.message });
+      sendJson(res, 401, { error: err.message });
     }
   } else if (url === '/api/auth/logout' && req.method === 'POST') {
     sendJson(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, '', 0) });
@@ -101,7 +141,32 @@ async function handleAuthApi(req, res, auth) {
 }
 
 export function createGateway({ clientDir, room, auth }) {
-  const server = http.createServer(async (req, res) => {
+  const clients = new Map(); // id -> ws
+  let nextId = 1;
+  const startedAt = Date.now();
+
+  // Endpoints de operación: /health para Docker/balanceadores y /metrics para Prometheus.
+  async function handleOpsEndpoints(req, res) {
+    const url = req.url.split('?')[0];
+    if (url === '/health' && req.method === 'GET') {
+      sendJson(res, 200, {
+        status: 'ok',
+        uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
+        roomState: room.state ?? null,
+        connections: clients.size
+      }, { 'Cache-Control': 'no-store' });
+      return true;
+    }
+    if (url === '/metrics' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': register.contentType, 'Cache-Control': 'no-store' });
+      res.end(await register.metrics());
+      return true;
+    }
+    return false;
+  }
+
+  async function handleRequest(req, res) {
+    if (await handleOpsEndpoints(req, res)) return;
     if (await handleAuthApi(req, res, auth)) return;
 
     let filePath = req.url === '/' ? '/index.html' : req.url;
@@ -130,16 +195,46 @@ export function createGateway({ clientDir, room, auth }) {
       res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
       res.end(data);
     });
+  }
+
+  const server = http.createServer((req, res) => {
+    const start = process.hrtime.bigint();
+    res.on('finish', () => {
+      const route = routeLabel(req.url, res.statusCode);
+      const seconds = Number(process.hrtime.bigint() - start) / 1e9;
+      httpRequestsTotal.inc({ method: req.method, route, status: res.statusCode });
+      httpRequestDuration.observe({ method: req.method, route }, seconds);
+    });
+    handleRequest(req, res).catch(err => {
+      logger.error('http.unhandled_error', { route: routeLabel(req.url), err });
+      if (!res.headersSent) res.writeHead(500);
+      res.end();
+    });
   });
 
   const wss = new WebSocketServer({ server });
-  const clients = new Map(); // id -> ws
-  let nextId = 1;
+
+  function sendTo(ws, message) {
+    const payload = JSON.stringify(message);
+    ws.send(payload);
+    wsMessagesSent.inc({ type: message.type });
+    wsBytesSent.inc(Buffer.byteLength(payload));
+  }
 
   function broadcast(message) {
+    const end = wsBroadcastDuration.startTimer();
     const payload = JSON.stringify(message);
+    let sent = 0;
     for (const ws of clients.values()) {
-      if (ws.readyState === ws.OPEN) ws.send(payload);
+      if (ws.readyState === ws.OPEN) {
+        ws.send(payload);
+        sent += 1;
+      }
+    }
+    end();
+    if (sent > 0) {
+      wsMessagesSent.inc({ type: message.type }, sent);
+      wsBytesSent.inc(Buffer.byteLength(payload) * sent);
     }
   }
   room.broadcast = broadcast;
@@ -148,22 +243,32 @@ export function createGateway({ clientDir, room, auth }) {
     // Solo usuarios con sesión de Google válida pueden entrar a la sala.
     const session = auth.sessionFromRequest(req);
     if (!session || !isSameOrigin(req)) {
+      wsConnectionsTotal.inc({ result: 'rejected' });
+      logger.warn('ws.rejected', { reason: session ? 'origin' : 'unauthenticated' });
       ws.close(4401, 'No autenticado');
       return;
     }
 
     const id = String(nextId++);
     clients.set(id, ws);
+    wsConnectionsTotal.inc({ result: 'accepted' });
+    wsConnections.set(clients.size);
+    logger.debug('ws.connected', { connId: id, connections: clients.size });
 
     ws.on('message', raw => {
       let msg;
       try {
         msg = JSON.parse(raw);
       } catch {
+        wsMessagesReceived.inc({ type: 'invalid' });
         return;
       }
       // JSON válido pero no objeto ("null", "3", ...): se ignora en vez de tumbar el proceso.
-      if (!msg || typeof msg !== 'object') return;
+      if (!msg || typeof msg !== 'object') {
+        wsMessagesReceived.inc({ type: 'invalid' });
+        return;
+      }
+      wsMessagesReceived.inc({ type: CLIENT_MESSAGE_TYPES.has(msg.type) ? msg.type : 'unknown' });
 
       switch (msg.type) {
         case 'join': {
@@ -171,7 +276,13 @@ export function createGateway({ clientDir, room, auth }) {
           const color = /^#[0-9a-fA-F]{6}$/.test(msg.color) ? msg.color : '#FCD116';
           // La foto sale de la sesión de Google, nunca del mensaje del cliente.
           const rejection = room.addPlayer(id, name, color, session.picture);
-          ws.send(JSON.stringify(rejection ? { type: 'join_rejected', reason: rejection } : { type: 'joined', id }));
+          if (rejection) {
+            joinRejections.inc({ reason: joinRejectionReason(rejection) });
+            logger.info('room.join_rejected', { connId: id, reason: rejection });
+          } else {
+            logger.info('room.joined', { connId: id });
+          }
+          sendTo(ws, rejection ? { type: 'join_rejected', reason: rejection } : { type: 'joined', id });
           break;
         }
         case 'ready':
@@ -205,6 +316,8 @@ export function createGateway({ clientDir, room, auth }) {
 
     ws.on('close', () => {
       clients.delete(id);
+      wsConnections.set(clients.size);
+      logger.debug('ws.disconnected', { connId: id, connections: clients.size });
       room.removePlayer(id);
     });
   });

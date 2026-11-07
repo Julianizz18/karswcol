@@ -1,0 +1,66 @@
+# Reglas de alerta de KARSWCOL. Se ven en Prometheus (http://localhost:9090/alerts)
+# y en Grafana (Alerting > Alert rules, fuente "Prometheus").
+# Los umbrales salen del presupuesto del game loop: un tick cada 50 ms.
+
+groups:
+  - name: karswcol
+    rules:
+      - alert: KarswcolCaido
+        expr: up{job="karswcol"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: El servidor de KARSWCOL no responde a Prometheus
+          description: "El endpoint /metrics de {{ $labels.instance }} lleva más de 30 s sin responder."
+
+      - alert: TickFueraDePresupuesto
+        expr: histogram_quantile(0.95, sum by (le) (rate(karswcol_tick_duration_seconds_bucket[1m]))) > 0.035
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: El game loop usa más del 70 % de su presupuesto de 50 ms
+          description: "p95 del tick = {{ $value | humanizeDuration }}. Con más carga los ticks empezarán a atrasarse."
+
+      - alert: TicksAtrasados
+        expr: histogram_quantile(0.95, sum by (le) (rate(karswcol_tick_interval_seconds_bucket[1m]))) > 0.075
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Los ticks llegan tarde (los jugadores ven saltos)
+          description: "p95 del intervalo entre ticks = {{ $value | humanizeDuration }} (ideal 50 ms)."
+
+      - alert: EventLoopBloqueado
+        expr: karswcol_nodejs_eventloop_lag_p99_seconds > 0.1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: El event loop de Node está bloqueado más de 100 ms
+          description: "Lag p99 = {{ $value | humanizeDuration }}."
+
+      - alert: MemoriaAlta
+        expr: karswcol_process_resident_memory_bytes > 400 * 1024 * 1024
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: El proceso usa más de 400 MB de memoria
+          description: "Memoria residente = {{ $value | humanize1024 }}B. Posible fuga si no baja al terminar la carga."
+
+      - alert: ErroresHttp5xx
+        expr: sum(rate(karswcol_http_requests_total{status=~"5.."}[2m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: El servidor está respondiendo errores 5xx
+
+      - alert: ClimaExternoFallando
+        expr: increase(karswcol_weather_refresh_total{result="error"}[30m]) > 2
+        labels:
+          severity: info
+        annotations:
+          summary: Open-Meteo no responde; las pistas usan su clima típico

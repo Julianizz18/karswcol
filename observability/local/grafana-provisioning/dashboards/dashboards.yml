@@ -1,0 +1,13 @@
+# Mismos dashboards que en Docker (observability/grafana/dashboards).
+# KARSWCOL_DASHBOARDS_DIR lo define start.ps1.
+apiVersion: 1
+
+providers:
+  - name: karswcol
+    folder: KARSWCOL
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: $KARSWCOL_DASHBOARDS_DIR

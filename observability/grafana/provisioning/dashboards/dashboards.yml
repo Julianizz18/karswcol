@@ -1,0 +1,12 @@
+# Carga los dashboards JSON de observability/grafana/dashboards en la carpeta "KARSWCOL".
+apiVersion: 1
+
+providers:
+  - name: karswcol
+    folder: KARSWCOL
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

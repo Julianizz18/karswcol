@@ -10,6 +10,8 @@ import { EventManager } from './event-manager/eventManager.js';
 import { PuddleField } from './game-engine/puddles.js';
 import { RankingService } from './ranking-persistence/rankingService.js';
 import { computeBotInput, BOT_NAMES } from './bots/botDriver.js';
+import { logger } from './observability/logger.js';
+import * as metrics from './observability/metrics.js';
 
 // Hora del día de la carrera: la elige cualquier jugador en el lobby.
 // "real" usa si en la región es de día o de noche ahora mismo.
@@ -70,6 +72,17 @@ export class RaceRoom {
     this.sendLobbyUpdate();
   }
 
+  /** Publica en Prometheus cuántos humanos y bots hay en la sala. */
+  updatePlayerMetrics() {
+    metrics.roomPlayers.set({ kind: 'bot' }, this.botIds.size);
+    metrics.roomPlayers.set({ kind: 'human' }, this.playerStates.size - this.botIds.size);
+  }
+
+  setState(state) {
+    this.state = state;
+    metrics.setRoomState(state);
+  }
+
   get track() {
     return getTrackById(this.trackId);
   }
@@ -83,6 +96,7 @@ export class RaceRoom {
     this.matchmaking.join(id, name, color, avatar);
     const slot = this.matchmaking.list().length - 1;
     this.playerStates.set(id, this.gameEngine.createPlayerState(id, name, color, slot, this.track));
+    this.updatePlayerMetrics();
     this.sendLobbyUpdate();
     return null;
   }
@@ -92,6 +106,7 @@ export class RaceRoom {
     if (this.paused && this.pausedBy === id) this.resume(null);
     this.matchmaking.leave(id);
     this.playerStates.delete(id);
+    this.updatePlayerMetrics();
     if (this.matchmaking.isEmpty()) {
       this.resetToLobby();
     } else {
@@ -118,6 +133,8 @@ export class RaceRoom {
     this.paused = true;
     this.pausedBy = id;
     this.pauseStartedAt = Date.now();
+    metrics.roomPaused.set(1);
+    logger.info('race.paused', { track: this.trackId });
     if (this.tickHandle) clearInterval(this.tickHandle);
     this.tickHandle = null;
     // Al reanudar nadie debe salir acelerando con una tecla "pegada".
@@ -131,7 +148,9 @@ export class RaceRoom {
     if (!this.paused) return;
     this.pausedTotalMs += Date.now() - this.pauseStartedAt;
     this.clearPause();
+    this.lastTickAt = null;
     this.tickHandle = setInterval(() => this.tick(), TICK_MS);
+    logger.info('race.resumed', { track: this.trackId });
     this.broadcast({ type: 'pause', paused: false, by: name });
   }
 
@@ -139,6 +158,7 @@ export class RaceRoom {
     this.paused = false;
     this.pausedBy = null;
     this.pauseStartedAt = null;
+    metrics.roomPaused.set(0);
   }
 
   setInput(id, input) {
@@ -205,7 +225,7 @@ export class RaceRoom {
   }
 
   startCountdown() {
-    this.state = 'countdown';
+    this.setState('countdown');
     this.countdownValue = 3;
     this.broadcast({ type: 'countdown', seconds: this.countdownValue });
     this.countdownHandle = setInterval(() => {
@@ -233,15 +253,18 @@ export class RaceRoom {
       this.playerStates.set(id, p);
       this.botIds.add(id);
     }
+    this.updatePlayerMetrics();
   }
 
   removeBots() {
     for (const id of this.botIds) this.playerStates.delete(id);
     this.botIds.clear();
+    this.updatePlayerMetrics();
   }
 
   startRace() {
-    this.state = 'racing';
+    this.setState('racing');
+    this.lastTickAt = null;
     this.clearPause();
     this.pausedTotalMs = 0;
     this.raceStartedAt = this.raceNow();
@@ -254,6 +277,14 @@ export class RaceRoom {
     this.puddles = new PuddleField(this.track);
     if (wetStart) this.puddles.update(Infinity, true);
     if (this.fillWithBots) this.spawnBots();
+    metrics.racesStarted.inc({ track: this.trackId });
+    logger.info('race.started', {
+      track: this.trackId,
+      difficulty: this.difficulty,
+      humans: this.playerStates.size - this.botIds.size,
+      bots: this.botIds.size,
+      wetStart
+    });
     this.broadcast({
       type: 'race_start',
       totalLaps: TOTAL_LAPS,
@@ -266,6 +297,21 @@ export class RaceRoom {
   }
 
   tick() {
+    const endTimer = metrics.tickDuration.startTimer();
+    const wallNow = performance.now();
+    if (this.lastTickAt !== null && this.lastTickAt !== undefined) {
+      metrics.tickInterval.observe((wallNow - this.lastTickAt) / 1000);
+    }
+    this.lastTickAt = wallNow;
+    metrics.ticksTotal.inc();
+    try {
+      this.runTick();
+    } finally {
+      endTimer();
+    }
+  }
+
+  runTick() {
     const now = this.raceNow();
     const speedFactor = this.eventManager.speedFactor();
     const gripFactor = this.eventManager.gripFactor();
@@ -281,8 +327,10 @@ export class RaceRoom {
       const lapEvent = this.gameEngine.step(p, now, this.raceStartedAt, speedFactor, track, gripFactor, puddle);
       if (lapEvent) {
         if (lapEvent.finished && this.firstFinishAt === null) this.firstFinishAt = now;
+        metrics.lapsCompleted.inc({ kind: p.isBot ? 'bot' : 'human' });
         this.broadcast({ type: 'event', kind: 'lap_completed', playerId: lapEvent.playerId, name: lapEvent.name, lap: lapEvent.lap });
         const rainEvent = this.eventManager.onLapCompleted(lapEvent.lap, now);
+        if (rainEvent) metrics.gameEvents.inc({ kind: rainEvent.type });
         if (rainEvent) this.broadcast({ type: 'event', kind: rainEvent.type, durationMs: rainEvent.durationMs });
       }
       // Mismo orden de iteración en cada tick: la resolución de conflictos
@@ -290,6 +338,7 @@ export class RaceRoom {
       // (incluye a los bots, que compiten por objetos igual que cualquiera).
       const claimEvent = this.concurrencyResolver.tryClaim(p, this.gameEngine, now);
       if (claimEvent) {
+        metrics.gameEvents.inc({ kind: claimEvent.type });
         this.broadcast({
           type: 'event',
           kind: claimEvent.type,
@@ -302,6 +351,7 @@ export class RaceRoom {
     }
 
     const expiredEvent = this.eventManager.tick(now);
+    if (expiredEvent) metrics.gameEvents.inc({ kind: expiredEvent.type });
     if (expiredEvent) this.broadcast({ type: 'event', kind: expiredEvent.type });
 
     this.broadcast({
@@ -318,14 +368,20 @@ export class RaceRoom {
     const allFinished = [...this.playerStates.values()].every(p => p.finished);
     const graceExpired = this.firstFinishAt !== null && now - this.firstFinishAt >= FINISH_GRACE_MS;
     const timeLimitExpired = now - this.raceStartedAt >= RACE_TIME_LIMIT_MS;
-    if (allFinished || graceExpired || timeLimitExpired) this.finishRace();
+    if (allFinished || graceExpired || timeLimitExpired) {
+      this.finishRace(allFinished ? 'all_finished' : graceExpired ? 'grace' : 'time_limit');
+    }
   }
 
-  finishRace() {
+  finishRace(reason = 'all_finished') {
     if (this.tickHandle) clearInterval(this.tickHandle);
     this.tickHandle = null;
     this.clearPause();
-    this.state = 'results';
+    this.setState('results');
+    const durationSeconds = this.raceStartedAt === null ? 0 : (this.raceNow() - this.raceStartedAt) / 1000;
+    metrics.racesFinished.inc({ track: this.trackId, reason });
+    metrics.raceDuration.observe(durationSeconds);
+    logger.info('race.finished', { track: this.trackId, reason, durationSeconds: Math.round(durationSeconds) });
     const ranking = this.rankingService.buildRanking([...this.playerStates.values()]);
     this.rankingService.persistRace(ranking);
     this.broadcast({ type: 'results', ranking });
@@ -349,7 +405,7 @@ export class RaceRoom {
     this.concurrencyResolver.clear();
     this.eventManager.reset();
     this.removeBots();
-    this.state = 'lobby';
+    this.setState('lobby');
     this.countdownValue = 0;
     this.raceStartedAt = null;
     this.matchmaking.resetReadiness();

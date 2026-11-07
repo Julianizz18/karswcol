@@ -26,11 +26,17 @@ compartiendo estado mutable directamente.
 
 ## Vista de infraestructura y despliegue
 
-`docker-compose.yml` (raíz del repo) define tres contenedores:
+`docker-compose.yml` (raíz del repo) define estos contenedores:
 
 - **gateway**: construido desde `server/Dockerfile`, expone el puerto 3000.
 - **redis**: coordinación/estado en memoria si el backend escala a varios procesos.
 - **postgres**: historial de partidas y ranking.
+- **prometheus**, **grafana**, **loki**, **promtail**: observabilidad (métricas,
+  dashboards, alertas y logs). El gateway expone `/metrics` y `/health`.
+- **k6** (perfil `loadtest`, se lanza a demanda): pruebas de carga que envían
+  sus métricas a Prometheus por remote-write.
+
+Detalle en [`OBSERVABILITY.md`](OBSERVABILITY.md).
 
 Estado actual: los contenedores de Redis y PostgreSQL ya están orquestados,
 pero el Game Engine y el Ranking Service todavía guardan todo en memoria de

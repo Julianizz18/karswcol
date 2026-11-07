@@ -1,0 +1,32 @@
+# Promtail en modo local (sin Docker): en vez de los logs de los contenedores
+# lee el archivo que escribe el servidor (LOG_FILE) y lo envía a Loki.
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  filename: ${PROMTAIL_POSITIONS}
+
+clients:
+  - url: http://localhost:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: karswcol
+    static_configs:
+      - targets: [localhost]
+        labels:
+          app: karswcol
+          service: gateway
+          __path__: ${KARSWCOL_LOG_FILE}
+    pipeline_stages:
+      - json:
+          expressions:
+            level: level
+            event: event
+            ts: ts
+      - timestamp:
+          source: ts
+          format: RFC3339Nano
+      - labels:
+          level:

@@ -40,8 +40,25 @@ sesión. Pruebas: `cd server && npm test`.
 docker compose up --build
 ```
 
-Levanta el gateway (puerto 3000), Redis y PostgreSQL. Ver `ARCHITECTURE.md`
-para el estado actual de esa integración.
+Levanta el gateway (puerto 3000), Redis, PostgreSQL y el stack de
+observabilidad: Prometheus (9090), Grafana (3001, admin/admin), Loki y
+Promtail. Ver `ARCHITECTURE.md` para el estado actual de la integración con
+Redis y PostgreSQL.
+
+### Observabilidad y pruebas de carga
+
+- Métricas Prometheus en `GET /metrics`, estado en `GET /health`.
+- Logs JSON estructurados, consultables en Grafana vía Loki.
+- Dashboards "KARSWCOL — Servidor" y "KARSWCOL — Pruebas de carga (k6)" y
+  reglas de alerta, todo aprovisionado automáticamente.
+- Pruebas de carga con k6 (humo, carga, estrés, pico y resistencia):
+
+```
+# con LOAD_TEST_TOKEN=... en .env
+docker compose --profile loadtest run --rm --service-ports k6 run /scripts/load.js
+```
+
+Guía completa, métricas, umbrales y resultados: [`OBSERVABILITY.md`](OBSERVABILITY.md).
 
 ## Estado actual (avance de sprint 1-2)
 
@@ -127,9 +144,13 @@ server/
     event-manager/             Event Manager
     ranking-persistence/      Ranking and Persistence Service
     bots/                       Bot Driver
+    observability/            Métricas (prom-client) y logger JSON
     raceRoom.js                 Orquestador de sala
   Dockerfile
 client/                        Cliente web estático (HTML/CSS/JS, sin build step)
-docker-compose.yml              Vista de infraestructura (gateway + redis + postgres)
+docker-compose.yml              Vista de infraestructura (gateway + redis + postgres + observabilidad + k6)
+observability/                  Prometheus, alertas, Promtail y dashboards de Grafana
+load-tests/                     Pruebas de carga con k6
+OBSERVABILITY.md                Guía de observabilidad y pruebas de carga
 ARCHITECTURE.md                  Mapeo componente ↔ código ↔ sección de la propuesta
 ```
