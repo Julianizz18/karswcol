@@ -26,15 +26,42 @@ Docker Compose y queda conectado entre sí:
 
 ## 1. Arrancar todo
 
+### Opción A — Docker (Windows, Mac o Linux)
+
+Copiar `.env.example` (raíz del repo) a `.env` y completarlo:
+
 ```bash
 # .env en la raíz del repo (junto a docker-compose.yml)
 GOOGLE_CLIENT_ID=...                  # para jugar con login real
 LOAD_TEST_TOKEN=un-valor-largo-y-aleatorio   # habilita el login sintético de k6
 ```
 
+> Con Docker el servidor **no** lee `server/.env`: Compose toma las variables
+> de este `.env` de la raíz. Si falta `GOOGLE_CLIENT_ID` aquí, el login con
+> Google no funciona dentro del contenedor.
+
 ```bash
 docker compose up --build -d
 ```
+
+### Opción B — Windows sin Docker
+
+Para equipos donde no se puede instalar Docker. Los scripts de
+`observability/local/` descargan (solo la primera vez, ~400 MB en `tools/`)
+versiones portables de Prometheus, Grafana, Loki, Promtail y k6, sin
+instalar nada ni pedir permisos de administrador:
+
+| Acción | Doble clic en | o en PowerShell |
+|---|---|---|
+| Arrancar juego + observabilidad | `observability\local\iniciar.bat` | `powershell -ExecutionPolicy Bypass -File observability\local\start.ps1` |
+| Prueba de carga | `observability\local\prueba-carga.bat` (smoke) | `powershell -ExecutionPolicy Bypass -File observability\local\k6.ps1 load.js` |
+| Detener todo | `observability\local\detener.bat` | `powershell -ExecutionPolicy Bypass -File observability\local\stop.ps1` |
+
+Usa los mismos puertos y dashboards que Docker. El token de k6 por defecto
+es `secreto123` (`start.ps1 -Token otro` para cambiarlo). Los logs de cada
+proceso quedan en `tools\logs\`.
+
+### Después de arrancar
 
 Abrir Grafana en http://localhost:3001. El dashboard de inicio es
 **KARSWCOL — Servidor**; desde el enlace de arriba se pasa a **KARSWCOL —
