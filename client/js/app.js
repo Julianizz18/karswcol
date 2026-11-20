@@ -1,6 +1,8 @@
 (() => {
   let selfId = null;
   let connected = false;
+  let lastJoinRequest = null; // último { name, color } enviado en "join"
+  let pendingJoin = null;     // join en espera de que termine la carrera en curso
   let selectedColor = KART_COLORS[0];
   let vehicleIndex = 0;
 
@@ -386,7 +388,16 @@
     });
 
     Net.on('join_rejected', msg => {
-      document.getElementById('join-error').textContent = msg.reason;
+      const errorEl = document.getElementById('join-error');
+      if (msg.waitMs != null) {
+        // Carrera en curso: se entra solo cuando la sala vuelva al lobby.
+        pendingJoin = lastJoinRequest;
+        const minutes = Math.max(1, Math.ceil(msg.waitMs / 60000));
+        errorEl.textContent = `Hay una carrera en curso (termina en ${minutes} min como máximo). Te quedas en espera y entrarás automáticamente cuando termine.`;
+      } else {
+        pendingJoin = null;
+        errorEl.textContent = msg.reason;
+      }
     });
 
     Net.on('lobby_update', msg => {
@@ -606,7 +617,8 @@
     errorEl.textContent = '';
     try {
       await ensureConnected();
-      Net.send('join', { name, color: selectedColor });
+      lastJoinRequest = { name, color: selectedColor };
+      Net.send('join', lastJoinRequest);
     } catch {
       errorEl.textContent = 'No se pudo conectar al servidor.';
     }
@@ -648,6 +660,12 @@
   }
 
   function onRoomReset() {
+    // Quien esperaba a que terminara la carrera entra ahora.
+    if (pendingJoin && !selfId) {
+      document.getElementById('join-error').textContent = 'La carrera terminó: entrando a la sala…';
+      Net.send('join', pendingJoin);
+      pendingJoin = null;
+    }
     clearInterval(resultsCountdown);
     document.getElementById('results-return').textContent = '';
     backLobbyBtn.disabled = false;

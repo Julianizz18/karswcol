@@ -137,7 +137,11 @@ export class RaceRoom {
       return { rejection: 'Ya estás en la sala desde otra pestaña o dispositivo.' };
     }
     const rejection = this.addPlayer(connId, name, color, avatar);
-    if (rejection) return { rejection };
+    if (rejection) {
+      // Carrera en curso: se dice cuánto falta como máximo y el cliente entra
+      // solo cuando la sala vuelva al lobby (room_reset).
+      return this.state === 'lobby' ? { rejection } : { rejection, waitMs: this.estimatedWaitMs() };
+    }
     if (userKey) {
       this.playerByUser.set(userKey, connId);
       this.userOfPlayer.set(connId, userKey);
@@ -166,6 +170,17 @@ export class RaceRoom {
     if (timer.unref) timer.unref();
     this.disconnected.set(id, timer);
     this.broadcast({ type: 'event', kind: 'player_disconnected', name: p.name, graceMs: RECONNECT_GRACE_MS });
+  }
+
+  /** Tiempo máximo hasta que la sala vuelva al lobby (para quien espera entrar). */
+  estimatedWaitMs() {
+    if (this.state === 'countdown') return this.countdownValue * 1000 + RACE_TIME_LIMIT_MS + RESULTS_RETURN_MS;
+    if (this.state === 'results') return RESULTS_RETURN_MS;
+    if (this.state !== 'racing' || this.raceStartedAt === null) return 0;
+    const now = this.raceNow();
+    let raceLeft = RACE_TIME_LIMIT_MS - (now - this.raceStartedAt);
+    if (this.firstFinishAt !== null) raceLeft = Math.min(raceLeft, FINISH_GRACE_MS - (now - this.firstFinishAt));
+    return Math.max(0, raceLeft) + RESULTS_RETURN_MS;
   }
 
   /** Mensajes para poner al día a quien vuelve a mitad de carrera. */

@@ -378,7 +378,7 @@ export function createGateway({ clientDir, room, auth, metricsToken = process.en
           if (result.rejection) {
             joinRejections.inc({ reason: joinRejectionReason(result.rejection) });
             logger.info('room.join_rejected', { connId: id, reason: result.rejection });
-            sendTo(ws, { type: 'join_rejected', reason: result.rejection });
+            sendTo(ws, { type: 'join_rejected', reason: result.rejection, waitMs: result.waitMs ?? null });
             break;
           }
           joined = true;

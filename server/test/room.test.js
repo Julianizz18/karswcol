@@ -1,6 +1,7 @@
 import { test, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { RaceRoom, RECONNECT_GRACE_MS, RESULTS_RETURN_MS } from '../src/raceRoom.js';
+import { RACE_TIME_LIMIT_MS } from '../src/game-engine/gameplayConfig.js';
 
 // Ciclo de vida de la sala en el lobby: entrar, salir y arrancar.
 
@@ -158,4 +159,20 @@ test('si no votan todos, la sala vuelve sola al lobby tras RESULTS_RETURN_MS', (
   room.requestRestart('1');
   mock.timers.tick(RESULTS_RETURN_MS);
   assert.equal(room.state, 'lobby');
+});
+
+test('quien llega con la carrera en curso recibe cuánto falta como máximo', () => {
+  join('1', 'johan');
+  room.startRace();
+  mock.timers.tick(60_000);
+  const late = join('2', 'sara');
+  assert.match(late.rejection, /carrera en curso/);
+  assert.equal(late.waitMs, RACE_TIME_LIMIT_MS - 60_000 + RESULTS_RETURN_MS);
+});
+
+test('en el lobby un rechazo (sala llena) no trae tiempo de espera', () => {
+  for (let i = 0; i < 8; i++) join(String(i), `p${i}`);
+  const full = join('99', 'tarde');
+  assert.match(full.rejection, /llena/);
+  assert.equal(full.waitMs, undefined);
 });
