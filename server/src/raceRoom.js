@@ -26,6 +26,10 @@ const DEFAULT_TIME_OF_DAY = 'dia';
 // cayó el internet), su kart se conserva este tiempo para que pueda volver.
 export const RECONNECT_GRACE_MS = 30000;
 
+// Pausas por jugador y por carrera: sin límite, alguien podía pausar una y
+// otra vez y arruinar la carrera a los demás. Reanudar no cuenta.
+export const MAX_PAUSES_PER_PLAYER = 3;
+
 // RaceRoom orquesta los componentes de la vista de aplicación (sección 4.1):
 // no implementa reglas de juego por sí misma, solo conecta Matchmaking,
 // Game Engine, Concurrency Resolver, Event Manager, Ranking Service y el
@@ -63,6 +67,7 @@ export class RaceRoom {
     this.playerByUser = new Map();
     this.userOfPlayer = new Map();
     this.disconnected = new Map(); // id -> timer de gracia
+    this.pausesUsed = new Map(); // id -> pausas usadas en esta carrera
   }
 
   /** Clima de la pista con la hora del día elegida en el lobby (día, noche o la real). */
@@ -212,8 +217,18 @@ export class RaceRoom {
     if (this.state !== 'racing') return;
     const p = this.playerStates.get(id);
     if (!p || p.isBot) return;
-    if (this.paused) this.resume(p.name);
-    else this.pause(id, p.name);
+    if (this.paused) {
+      this.resume(p.name);
+      return;
+    }
+    const used = this.pausesUsed.get(id) || 0;
+    if (used >= MAX_PAUSES_PER_PLAYER) {
+      this.broadcast({ type: 'event', kind: 'pause_denied', byId: id, max: MAX_PAUSES_PER_PLAYER });
+      return;
+    }
+    this.pausesUsed.set(id, used + 1);
+    this.pause(id, p.name);
+    this.broadcast({ type: 'event', kind: 'pause_count', byId: id, remaining: MAX_PAUSES_PER_PLAYER - used - 1 });
   }
 
   pause(id, name) {
@@ -352,6 +367,7 @@ export class RaceRoom {
 
   startRace() {
     this.setState('racing');
+    this.pausesUsed.clear();
     this.lastTickAt = null;
     this.clearPause();
     this.pausedTotalMs = 0;

@@ -1,6 +1,6 @@
 import { test, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { RaceRoom } from '../src/raceRoom.js';
+import { RaceRoom, MAX_PAUSES_PER_PLAYER } from '../src/raceRoom.js';
 import { TICK_MS } from '../src/game-engine/gameEngine.js';
 import { RACE_TIME_LIMIT_MS } from '../src/game-engine/gameplayConfig.js';
 
@@ -87,4 +87,27 @@ test('no se puede pausar fuera de la carrera', () => {
   room.togglePause('1');
   assert.equal(room.paused, false);
   assert.equal(messagesOfType('pause').length, 0);
+});
+
+test('cada jugador puede pausar como máximo MAX_PAUSES_PER_PLAYER veces por carrera', () => {
+  for (let i = 0; i < MAX_PAUSES_PER_PLAYER; i++) {
+    room.togglePause('1');
+    assert.equal(room.paused, true);
+    room.togglePause('1');
+    assert.equal(room.paused, false);
+  }
+  room.togglePause('1');
+  assert.equal(room.paused, false, 'la cuarta pausa se rechaza');
+  assert.deepEqual(messages.filter(m => m.kind === 'pause_denied').at(-1), { type: 'event', kind: 'pause_denied', byId: '1', max: MAX_PAUSES_PER_PLAYER });
+  room.togglePause('2');
+  assert.equal(room.paused, true, 'el otro jugador conserva sus pausas');
+});
+
+test('reanudar no gasta pausas y una carrera nueva las repone', () => {
+  room.togglePause('1');
+  room.togglePause('2'); // el otro reanuda: no le cuenta
+  assert.equal(room.pausesUsed.get('2') || 0, 0);
+  room.resetToLobby();
+  room.startRace();
+  assert.equal(room.pausesUsed.size, 0);
 });

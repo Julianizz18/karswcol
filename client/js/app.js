@@ -505,6 +505,11 @@
         showToast('🌧️ ¡Aguacero! Se forman charcos: esquívalos o frena antes');
       } else if (msg.kind === 'rain_end') {
         showToast('☀️ Paró de llover: la pista se va secando');
+      } else if (msg.kind === 'pause_denied' && msg.byId === selfId) {
+        showToast(`⏸ Ya usaste tus ${msg.max} pausas de esta carrera`);
+      } else if (msg.kind === 'pause_count' && msg.byId === selfId) {
+        document.getElementById('pause-by').textContent =
+          `Pausaste la carrera · te ${msg.remaining === 1 ? 'queda 1 pausa' : `quedan ${msg.remaining} pausas`}`;
       } else if (msg.kind === 'player_disconnected') {
         showToast(`📡 ${msg.name} se desconectó: tiene ${Math.round(msg.graceMs / 1000)} s para volver`);
       } else if (msg.kind === 'lap_completed' && msg.playerId === selfId) {
