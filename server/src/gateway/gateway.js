@@ -94,6 +94,33 @@ const CLIENT_MESSAGE_TYPES = new Set([
   'join', 'ready', 'select_track', 'select_time', 'select_difficulty', 'toggle_bots', 'input', 'toggle_pause', 'restart'
 ]);
 
+// Límite de mensajes por conexión (token bucket). Un jugador real manda
+// unos pocos por segundo (solo cuando cambia una tecla) y k6 unos 10/s.
+// Lo que pase de ahí se descarta; quien insista muy por encima se desconecta.
+export const MESSAGE_RATE_PER_SEC = 30;
+export const MESSAGE_BURST = 60;
+export const MAX_DROPPED_BEFORE_CLOSE = 300;
+
+function createRateLimiter(now = Date.now()) {
+  let tokens = MESSAGE_BURST;
+  let last = now;
+  let dropped = 0;
+  return {
+    /** true si el mensaje se puede procesar. */
+    allow(t = Date.now()) {
+      tokens = Math.min(MESSAGE_BURST, tokens + ((t - last) / 1000) * MESSAGE_RATE_PER_SEC);
+      last = t;
+      if (tokens >= 1) {
+        tokens -= 1;
+        return true;
+      }
+      dropped += 1;
+      return false;
+    },
+    get dropped() { return dropped; }
+  };
+}
+
 function joinRejectionReason(text) {
   return /llena/i.test(text) ? 'room_full' : /curso/i.test(text) ? 'race_in_progress' : 'other';
 }
@@ -293,12 +320,21 @@ export function createGateway({ clientDir, room, auth, metricsToken = process.en
     // Solo quien entró a la sala puede controlarla: una pestaña que se quedó
     // en el menú no debe cambiar la pista ni reiniciar la carrera de otros.
     let joined = false;
+    const limiter = createRateLimiter();
     clients.set(id, ws);
     wsConnectionsTotal.inc({ result: 'accepted' });
     wsConnections.set(clients.size);
     logger.debug('ws.connected', { connId: id, connections: clients.size });
 
     ws.on('message', raw => {
+      if (!limiter.allow()) {
+        wsMessagesReceived.inc({ type: 'rate_limited' });
+        if (limiter.dropped === MAX_DROPPED_BEFORE_CLOSE) {
+          logger.warn('ws.rate_limited_close', { connId: id });
+          ws.close(1008, 'Demasiados mensajes');
+        }
+        return;
+      }
       let msg;
       try {
         msg = JSON.parse(raw);

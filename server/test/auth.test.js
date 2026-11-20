@@ -213,3 +213,28 @@ test('una carpeta no se sirve como archivo', async () => {
   const res = await fetch(`${base}/img`);
   assert.equal(res.status, 404);
 });
+
+test('los mensajes por encima del límite se descartan', async () => {
+  const res = await login('token-valido');
+  const ws = openSocket(sessionCookieFrom(res));
+  await new Promise(resolve => ws.on('open', resolve));
+  ws.send(JSON.stringify({ type: 'join', name: 'Spam', color: '#FCD116' }));
+  await new Promise(resolve => ws.on('message', resolve));
+  const before = room.tracks.length;
+  for (let i = 0; i < 200; i++) ws.send(JSON.stringify({ type: 'select_track', trackId: `spam-${i}` }));
+  await new Promise(resolve => setTimeout(resolve, 100));
+  const processed = room.tracks.length - before;
+  // La ráfaga permite ~60 (menos el join); el resto se descarta.
+  assert.ok(processed < 70, `se procesaron ${processed}`);
+  assert.ok(processed >= 50, `se procesaron ${processed}`);
+  ws.close();
+});
+
+test('quien insiste muy por encima del límite es desconectado', async () => {
+  const res = await login('token-valido');
+  const ws = openSocket(sessionCookieFrom(res));
+  await new Promise(resolve => ws.on('open', resolve));
+  const closed = new Promise(resolve => ws.on('close', code => resolve(code)));
+  for (let i = 0; i < 500; i++) ws.send(JSON.stringify({ type: 'input', input: {} }));
+  assert.equal(await closed, 1008);
+});
