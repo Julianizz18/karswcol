@@ -479,6 +479,89 @@ function buildTrees(track, rand) {
   return group;
 }
 
+// ---------- Elementos típicos de cada región ----------
+// Cada pista suma objetos de su región alrededor del trazado. Un elemento
+// se arma con varias piezas (geometrías ya desplazadas a su lugar dentro del
+// objeto) y cada pieza es un InstancedMesh: cientos de objetos cuestan unas
+// pocas llamadas de dibujo.
+
+/**
+ * Reparte `count` objetos fuera de la carretera, entre `minGap` y `maxGap`
+ * unidades del borde (cerca de la pista, donde se ven desde el kart).
+ */
+function scatterProps(track, rand, { count, parts, minGap = 18, maxGap = 160, minSize = 0.8, maxSize = 1.3 }) {
+  const group = new THREE.Group();
+  const meshes = parts.map(({ geometry, color, material }) => {
+    const mesh = new THREE.InstancedMesh(geometry, material || new THREE.MeshLambertMaterial({ color, flatShading: true }), count);
+    mesh.castShadow = true;
+    group.add(mesh);
+    return mesh;
+  });
+  const path = trackPath(track);
+  const nearTrack = nearTrackTester(track);
+  const start = track.startLine;
+  const edge = track.roadWidth / 2 + CURB_WIDTH;
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+
+  let placed = 0;
+  let attempts = 0;
+  while (placed < count && attempts < count * 40 && path.n) {
+    attempts++;
+    // Un punto de la línea central y un desplazamiento perpendicular a la
+    // carretera, a la izquierda o a la derecha.
+    const i = Math.floor(rand() * path.n);
+    const side = rand() < 0.5 ? -1 : 1;
+    const dist = edge + minGap + rand() * (maxGap - minGap);
+    const x = path.x[i] + path.nx[i] * side * dist;
+    const z = path.z[i] + path.nz[i] * side * dist;
+    // Otra parte del trazado puede pasar cerca (curvas cerradas, horquillas).
+    if (nearTrack(x, z, edge + minGap)) continue;
+    if (Math.hypot(x - start.x, z - start.y) < track.roadWidth + 30) continue;
+
+    const size = minSize + rand() * (maxSize - minSize);
+    q.setFromAxisAngle(up, rand() * Math.PI * 2);
+    m.compose(new THREE.Vector3(x, 0, z), q, new THREE.Vector3(size, size, size));
+    meshes.forEach(mesh => mesh.setMatrixAt(placed, m));
+    placed++;
+  }
+  meshes.forEach(mesh => { mesh.count = placed; });
+  return group;
+}
+
+/** Geometría ya ubicada dentro del objeto: (x, y, z) es el centro de la pieza. */
+function piece(geometry, x, y, z) {
+  geometry.translate(x, y, z);
+  return geometry;
+}
+
+// Costa de Cartagena: sombrillas de playa de rayas.
+function caribeProps(track, rand) {
+  const group = new THREE.Group();
+  [['#e63946', '#f1faee'], ['#1d6fa5', '#f1faee'], ['#f2c14e', '#e76f51']].forEach(([a, b]) => {
+    group.add(scatterProps(track, rand, {
+      count: 14,
+      parts: [
+        { geometry: piece(new THREE.CylinderGeometry(0.35, 0.35, 11, 6), 0, 5.5, 0), color: '#d9d4c7' },
+        { geometry: piece(new THREE.ConeGeometry(8, 3, 8, 1, true), 0, 11.5, 0), color: a, material: new THREE.MeshLambertMaterial({ color: a, flatShading: true, side: THREE.DoubleSide }) },
+        { geometry: piece(new THREE.ConeGeometry(8.05, 3, 8, 1, true, 0, Math.PI / 4), 0, 11.5, 0), color: b, material: new THREE.MeshLambertMaterial({ color: b, flatShading: true, side: THREE.DoubleSide }) },
+        { geometry: piece(new THREE.BoxGeometry(6, 0.8, 3), 3.5, 0.6, 3), color: '#f4f1e8' } // toalla / asiento
+      ]
+    }));
+  });
+  return group;
+}
+
+const REGIONAL_PROPS = {
+  caribe: caribeProps
+};
+
+function buildRegionalProps(track, rand) {
+  const builder = REGIONAL_PROPS[track.id];
+  return builder ? builder(track, rand) : null;
+}
+
 /** Postes a ambos lados de la pista en el punto (x, y) con rumbo `angle`. */
 function sidePoints(track, x, y, angle, lateral) {
   const nx = -Math.sin(angle);
@@ -828,6 +911,9 @@ function buildTrack(track) {
   group.add(buildCheckpointGates(track, pal));
   group.add(buildTrees(track, rand));
   group.add(buildMountains(track, pal, horizon, rand));
+  // Semilla propia: agregar elementos regionales no mueve árboles, montañas ni nubes.
+  const regionalProps = buildRegionalProps(track, seededRandom(`${track.id}-props`));
+  if (regionalProps) group.add(regionalProps);
   if (!look.isDay) group.add(buildFloodlights(track));
   atmosphere = buildAtmosphere(track, look, rand);
   group.add(atmosphere.group);
