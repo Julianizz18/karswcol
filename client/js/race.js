@@ -241,14 +241,81 @@ const Race = (() => {
     ctx.beginPath();
     ctx.arc(0, 0, 14, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#FCD116';
+    ctx.strokeStyle = PICKUP_RING[pu.kind] || '#FCD116';
     ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.font = '16px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(pu.emoji || '⭐', 0, 1);
+    drawPickupIcon(pu.kind);
     ctx.restore();
+  }
+
+  // Íconos dibujados a mano (mismos colores que los modelos 3D) en vez de
+  // emojis: 🫓 y 🫔 son de 2021 y en Windows 10 y varios Linux salían como
+  // un cuadrado vacío.
+  const PICKUP_RING = {
+    tinto: '#ffb347', arepa: '#ffe08a', aguapanela: '#ffc35c',
+    lechona: '#ff8a65', tamal: '#8be07a', bunuelo: '#ffd25e'
+  };
+
+  function shape(fill, draw) {
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    draw();
+    ctx.fill();
+  }
+
+  function drawPickupIcon(kind) {
+    switch (kind) {
+      case 'tinto': // pocillo con café
+        shape('#f7f3ec', () => ctx.roundRect(-6, -5, 10, 11, 2));
+        ctx.strokeStyle = '#f7f3ec';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(5, 0, 3, -Math.PI / 2, Math.PI / 2);
+        ctx.stroke();
+        shape('#3b2010', () => ctx.ellipse(-1, -4, 4, 1.5, 0, 0, Math.PI * 2));
+        break;
+      case 'arepa': // arepa con marcas de parrilla
+        shape('#e8c37a', () => ctx.arc(0, 0, 8, 0, Math.PI * 2));
+        ctx.strokeStyle = '#8a5a22';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (const y of [-3, 1, 5]) { ctx.moveTo(-5, y - 1); ctx.lineTo(5, y - 1); }
+        ctx.stroke();
+        break;
+      case 'aguapanela': // vaso con aguapanela
+        shape('rgba(230,244,255,0.5)', () => { ctx.moveTo(-6, -8); ctx.lineTo(6, -8); ctx.lineTo(4, 8); ctx.lineTo(-4, 8); ctx.closePath(); });
+        shape('#c4782a', () => { ctx.moveTo(-5, -4); ctx.lineTo(5, -4); ctx.lineTo(4, 8); ctx.lineTo(-4, 8); ctx.closePath(); });
+        break;
+      case 'lechona': // lechoncito
+        shape('#c9763d', () => ctx.ellipse(-1, 1, 8, 6, 0, 0, Math.PI * 2));
+        shape('#e09a6b', () => ctx.ellipse(7, 1, 2.5, 2.5, 0, 0, Math.PI * 2));
+        shape('#a65a2a', () => { ctx.moveTo(1, -4); ctx.lineTo(4, -8); ctx.lineTo(5, -3); ctx.closePath(); });
+        break;
+      case 'tamal': // tamal en hoja, amarrado
+        shape('#3f7d2c', () => ctx.roundRect(-8, -6, 16, 12, 3));
+        ctx.strokeStyle = '#e7d7a8';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-3, -6); ctx.lineTo(-3, 6);
+        ctx.moveTo(3, -6); ctx.lineTo(3, 6);
+        ctx.moveTo(-8, 0); ctx.lineTo(8, 0);
+        ctx.stroke();
+        break;
+      case 'bunuelo': // buñuelo dorado
+        shape('#d99a3c', () => ctx.arc(0, 1, 7.5, 0, Math.PI * 2));
+        shape('#f1c27a', () => ctx.arc(-2.5, -2, 2.5, 0, Math.PI * 2));
+        break;
+      default: { // estrella
+        shape('#FCD116', () => {
+          for (let i = 0; i < 10; i++) {
+            const r = i % 2 ? 3.5 : 8;
+            const a = -Math.PI / 2 + (i * Math.PI) / 5;
+            ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+          }
+          ctx.closePath();
+        });
+      }
+    }
   }
 
   let rainDrops = null;

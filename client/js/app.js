@@ -1,6 +1,7 @@
 (() => {
   let selfId = null;
   let connected = false;
+  const FEMININE_ITEMS = new Set(['Arepa', 'Aguapanela', 'Lechona']);
   let lastJoinRequest = null; // último { name, color } enviado en "join"
   let pendingJoin = null;     // join en espera de que termine la carrera en curso
   let selectedColor = KART_COLORS[0];
@@ -551,7 +552,10 @@
 
     Net.on('event', msg => {
       if (msg.kind === 'pickup_claimed') {
-        showToast(`${msg.by} tomó ${msg.itemName ? 'un ' + msg.itemName : 'un objeto'} ${msg.emoji || '⚡'}`);
+        // Sin el emoji del objeto (🫓 y 🫔 no existen en Windows 10) y con el
+        // artículo correcto: "una arepa", no "un Arepa".
+        const item = msg.itemName ? `${FEMININE_ITEMS.has(msg.itemName) ? 'una' : 'un'} ${msg.itemName.toLowerCase()}` : 'un objeto';
+        showToast(`⚡ ${msg.by} tomó ${item}`);
       } else if (msg.kind === 'rain_start') {
         showToast('🌧️ ¡Aguacero! Se forman charcos: esquívalos o frena antes');
       } else if (msg.kind === 'rain_end') {
