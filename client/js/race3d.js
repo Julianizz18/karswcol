@@ -492,8 +492,10 @@ function buildTrees(track, rand) {
 function scatterProps(track, rand, { count, parts, minGap = 18, maxGap = 160, minSize = 0.8, maxSize = 1.3 }) {
   const group = new THREE.Group();
   const meshes = parts.map(({ geometry, color, material }) => {
-    const mesh = new THREE.InstancedMesh(geometry, material || new THREE.MeshLambertMaterial({ color, flatShading: true }), count);
-    mesh.castShadow = true;
+    // Material compartido por color (mat) y sin sombra: son objetos bajos
+    // cuya sombra casi no se ve, y proyectarla obliga a dibujarlos dos veces.
+    const mesh = new THREE.InstancedMesh(geometry, material || mat(color), count);
+    mesh.castShadow = false;
     group.add(mesh);
     return mesh;
   });
