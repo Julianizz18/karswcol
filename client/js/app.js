@@ -283,7 +283,7 @@
   document.getElementById('track-next').addEventListener('click', () => stepTrack(1));
 
   /**
-   * Control segmentado (dificultad, hora del día): cualquier jugador elige y
+   * Control segmentado (dificultad, hora del día): el anfitrión elige y
    * aplica a la sala. El indicador se desliza por CSS según --index/--count.
    */
   // Solo el anfitrión configura la sala: a los demás se les deshabilitan los

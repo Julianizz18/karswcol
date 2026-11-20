@@ -1,5 +1,5 @@
 // Perfiles de dificultad para los bots. Es una configuración global de sala
-// (la elige cualquier jugador en el lobby y aplica por igual a todos los
+// (la elige el anfitrión de la sala en el lobby y aplica por igual a todos los
 // bots), no un ajuste por bot individual.
 
 export const DIFFICULTIES = {

@@ -4,6 +4,24 @@ Carreras 2D multijugador en tiempo real con identidad colombiana. Backend
 autoritativo en Node.js organizado por componentes (ver `ARCHITECTURE.md`),
 cliente web navegable (menú → lobby → carrera → resultados).
 
+[![CI](https://github.com/Julianizz18/karswcol/actions/workflows/ci.yml/badge.svg)](https://github.com/Julianizz18/karswcol/actions/workflows/ci.yml)
+
+**Jugar en línea:** https://karswcol.onrender.com (Render, plan gratuito: si nadie
+lo usó en 15 min, la primera carga tarda 30–60 s mientras el servidor despierta).
+
+## Documentación de atributos de calidad (Release 2)
+
+| Atributo | Documento |
+|---|---|
+| Disponibilidad y escalabilidad (SLA, serie/paralelo, downtime) | [docs/disponibilidad.md](docs/disponibilidad.md) |
+| Seguridad (3 escenarios con validación ejecutable) | [docs/seguridad.md](docs/seguridad.md) |
+| Mantenibilidad (CI, SonarCloud, cobertura por capa) | [docs/mantenibilidad.md](docs/mantenibilidad.md) |
+| Portabilidad (migración Cloud → On-Premise) | [docs/portabilidad.md](docs/portabilidad.md) |
+| Rendimiento (k6: carga, estrés, picos; TPS/TPM) | [docs/rendimiento.md](docs/rendimiento.md) |
+| Observabilidad (Prometheus, Grafana, alertas) | [OBSERVABILITY.md](OBSERVABILITY.md) |
+| Concurrencia y tiempo real | [docs/concurrencia.md](docs/concurrencia.md) |
+| Uso de IA | [docs/uso-de-ia.md](docs/uso-de-ia.md) |
+
 ## Ejecutar
 
 ### Local (sin Docker)
@@ -62,7 +80,27 @@ docker compose --profile loadtest run --rm --service-ports k6 run /scripts/load.
 
 Guía completa, métricas, umbrales y resultados: [`OBSERVABILITY.md`](OBSERVABILITY.md).
 
-## Calidad de código (SonarQube)
+## Pruebas y calidad de código
+
+```bash
+cd server
+npm ci
+npm test            # pruebas de servidor y cliente (el cliente corre en jsdom)
+npm run coverage    # cobertura de ambas capas en server/coverage/lcov.info
+```
+
+En cada push, GitHub Actions (`.github/workflows/ci.yml`, compuesto por
+reusable workflows) corre las pruebas con cobertura, analiza el código en
+SonarCloud esperando el Quality Gate y construye y prueba la imagen Docker.
+Configuración de SonarCloud y cifras de cobertura: [docs/mantenibilidad.md](docs/mantenibilidad.md).
+
+### Despliegue en Render
+
+`render.yaml` define el servicio (Docker, plan gratuito, `/health`). Cada push
+a la rama `master` de GitHub lo redespliega. Variables: `GOOGLE_CLIENT_ID`
+(manual), `SESSION_SECRET` y `METRICS_TOKEN` (generadas por Render).
+
+### SonarQube local (alternativa sin SonarCloud)
 
 SonarQube corre en Docker con el perfil `quality` (no arranca con `docker compose up`):
 
@@ -70,7 +108,7 @@ SonarQube corre en Docker con el perfil `quality` (no arranca con `docker compos
 # 1. Levantar SonarQube -> http://localhost:9000 (admin/admin la primera vez)
 docker compose --profile quality up -d sonarqube
 
-# 2. Generar la cobertura de las pruebas del servidor (server/coverage/lcov.info)
+# 2. Generar la cobertura de servidor y cliente (server/coverage/lcov.info)
 cd server && npm run coverage && cd ..
 
 # 3. Crear un token en SonarQube (My Account > Security > Global Analysis Token),
@@ -80,7 +118,7 @@ docker compose --profile quality run --rm sonar-scanner
 
 La configuración del análisis está en `sonar-project.properties`.
 
-## Estado actual (avance de sprint 1-2)
+## Estado actual (Release 2)
 
 Implementado:
 - Menú de navegación (Jugar / Cómo jugar / Créditos), lobby con estado
@@ -138,18 +176,24 @@ Implementado:
   cruzó la meta y completó una vuelta, además del contador en el HUD.
 - Bots que completan la sala (`🤖 Completar con bots` en el lobby) hasta
   llegar a 6 participantes, sin quitar jugadores reales de más. La
-  dificultad (Fácil/Medio/Difícil) la elige cualquier jugador y aplica por
+  dificultad (Fácil/Medio/Difícil) la elige el anfitrión de la sala y aplica por
   igual a todos los bots de esa carrera (`server/src/bots/botDriver.js`,
   `server/src/game-engine/difficulty.js`).
 - Soporte de control físico (PS4, Xbox y compatibles) vía la Gamepad API
   del navegador (`client/js/gamepad.js`): stick izquierdo para girar,
   R2/Cross para acelerar, L2/Square para frenar. No requiere cambios en el
   servidor porque el input llega en el mismo formato que el del teclado.
+- Release 2: anfitrión de sala (solo él configura), una cuenta = un kart,
+  reconexión automática y regreso a la carrera tras recargar (30 s de
+  gracia), votación para volver al lobby, espera con entrada automática
+  cuando hay una carrera en curso, límite de 3 pausas, tiempos por vuelta y
+  mejor vuelta, parrilla sorteada, lluvia variable, objetos en 3D, elementos
+  típicos por región, contador de FPS y calidad gráfica adaptativa, límite
+  de mensajes por conexión y revocación de sesiones.
 
-Pendiente (siguiente sprint, según release plan):
+Pendiente (fuera del alcance por la restricción de costo, ver docs/disponibilidad.md):
 - Conectar `RankingService` a PostgreSQL y usar Redis como lock distribuido
   si el backend escala a varios procesos (HU05, HU06).
-- Reconexión con token de sesión (HU06).
 - Matchmaking real por salas (hoy hay una sola sala compartida, con una
   pista seleccionable por todos antes de iniciar).
 

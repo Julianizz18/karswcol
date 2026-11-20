@@ -13,7 +13,7 @@ import { computeBotInput, BOT_NAMES } from './bots/botDriver.js';
 import { logger } from './observability/logger.js';
 import * as metrics from './observability/metrics.js';
 
-// Hora del día de la carrera: la elige cualquier jugador en el lobby.
+// Hora del día de la carrera: la elige el anfitrión en el lobby.
 // "real" usa si en la región es de día o de noche ahora mismo.
 export const TIMES_OF_DAY = [
   { id: 'dia', label: 'Día' },

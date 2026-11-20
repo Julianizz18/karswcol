@@ -109,7 +109,7 @@ jugador es un bot, `computeBotInput` (Bot Driver) calcula hacia dónde girar
 siguiendo la línea central de la pista activa: apunta a un punto más
 adelante del trazado (más lejos cuanto más rápido va) y frena cuando supera
 la velocidad recomendada para la curva que viene. La dificultad (`server/src/game-engine/difficulty.js`)
-es una configuración de sala, no por bot — la elige cualquier jugador en el
+es una configuración de sala, no por bot — la elige el anfitrión de la sala en el
 lobby y aplica a todos los bots de esa carrera por igual.
 
 ## Control físico (Gamepad API)
