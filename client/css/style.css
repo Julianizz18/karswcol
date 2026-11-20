@@ -1513,6 +1513,23 @@ kbd {
   pointer-events: none;
 }
 
+/* Contador de FPS (js/fps.js): esquina superior izquierda, libre del minimapa y el velocímetro. */
+.fps-counter {
+  position: absolute;
+  top: 12px;
+  left: calc(12px + env(safe-area-inset-left));
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.55);
+  color: var(--green);
+  font: 700 0.75rem/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  z-index: 2;
+}
+.fps-counter[data-level="ok"] { color: #f2c14e; }
+.fps-counter[data-level="bad"] { color: var(--red); }
+
 .minimap {
   position: absolute;
   top: 12px;
