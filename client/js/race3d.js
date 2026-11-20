@@ -2088,6 +2088,10 @@ window.Race3D = {
   setTrack,
   update,
   get track() { return currentTrack; },
-  get weather() { return currentWeather; }
+  get weather() { return currentWeather; },
+  /** Nivel de calidad gráfica actual ("alta", "media", ...), para el HUD. */
+  get quality() { return renderer ? quality().name : null; },
+  /** true mientras se dibuja la vista 3D (y no la 2D). */
+  get active() { return !!renderer && isVisible(); }
 };
 window.dispatchEvent(new Event('race3d-ready'));

@@ -1,4 +1,4 @@
-// Contador de FPS en la esquina superior izquierda de la carrera. Cuenta los
+// Contador de FPS (y calidad gráfica en 3D) en la esquina superior izquierda. Cuenta los
 // frames que el navegador alcanza a dibujar (requestAnimationFrame) y los
 // muestra cada medio segundo, con color según qué tan fluido va el juego.
 // Solo corre mientras la pantalla de carrera está visible.
@@ -25,7 +25,10 @@ const FpsCounter = (() => {
     current = Math.round((frames * 1000) / elapsed);
     frames = 0;
     windowStart = now;
-    el.textContent = `${current} FPS`;
+    // En la vista 3D se muestra también la calidad gráfica: si bajó sola por
+    // rendimiento, el jugador lo ve sin abrir la consola.
+    const race3d = window.Race3D;
+    el.textContent = race3d && race3d.active ? `${current} FPS · ${race3d.quality}` : `${current} FPS`;
     el.dataset.level = current >= 55 ? 'good' : current >= 30 ? 'ok' : 'bad';
   }
 
