@@ -64,7 +64,7 @@ let rain = null;
 let selfId = null;
 let snapshots = [];
 const vehicles = new Map(); // id -> { group, kind, ... }
-const pickupSprites = new Map();
+const pickupModels = new Map(); // id -> grupo 3D del objeto recogible
 const cam = { angle: null, initialized: false, tilt: 0, prevSelfAngle: null };
 let rafHandle = null;
 let lastFrame = 0;
@@ -345,22 +345,6 @@ function labelTexture(text) {
   });
 }
 
-function emojiTexture(emoji) {
-  return canvasTexture(128, 128, (g, w, h) => {
-    g.fillStyle = 'rgba(13,21,38,0.85)';
-    g.beginPath();
-    g.arc(w / 2, h / 2, 56, 0, Math.PI * 2);
-    g.fill();
-    g.strokeStyle = '#FCD116';
-    g.lineWidth = 7;
-    g.stroke();
-    g.font = '64px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.fillText(emoji, w / 2, h / 2 + 4);
-  });
-}
-
 const glowTexture = canvasTexture(64, 64, (g, w, h) => {
   const grad = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
   grad.addColorStop(0, 'rgba(255,255,255,1)');
@@ -378,6 +362,7 @@ function disposeGroup(group) {
     if (obj.material) {
       const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
       mats.forEach(m => {
+        if (m.userData.shared) return; // material de mat(), lo siguen usando otros modelos
         if (m.map && !m.map.userData.shared) m.map.dispose();
         m.dispose();
       });
@@ -866,11 +851,11 @@ function setTrack(track, weather) {
     disposeGroup(v.group);
   });
   vehicles.clear();
-  pickupSprites.forEach(s => {
-    scene.remove(s);
-    disposeGroup(s);
+  pickupModels.forEach(m => {
+    scene.remove(m);
+    disposeGroup(m);
   });
-  pickupSprites.clear();
+  pickupModels.clear();
   puddleMeshes.clear();
   wetness = 0;
   snapshots = [];
@@ -891,7 +876,11 @@ function setTrack(track, weather) {
 // rotación según el ángulo del servidor es la misma: rotation.y = -ángulo.
 const modelMaterials = new Map();
 function mat(color) {
-  if (!modelMaterials.has(color)) modelMaterials.set(color, new THREE.MeshLambertMaterial({ color, flatShading: true }));
+  if (!modelMaterials.has(color)) {
+    const material = new THREE.MeshLambertMaterial({ color, flatShading: true });
+    material.userData.shared = true; // lo usan varios modelos: disposeGroup no lo destruye
+    modelMaterials.set(color, material);
+  }
   return modelMaterials.get(color);
 }
 
@@ -1310,22 +1299,116 @@ function updateVehicle(v, p, isSelf, time) {
   }
 }
 
+// ---------- Objetos recogibles en 3D ----------
+// Cada objeto de la cocina colombiana tiene su propio modelo low-poly (mismo
+// estilo flatShading que los vehículos), flota y gira sobre un aro de luz
+// del color del objeto para que se vea de lejos.
+const PICKUP_GLOW = {
+  tinto: '#ffb347', arepa: '#ffe08a', aguapanela: '#ffc35c',
+  lechona: '#ff8a65', tamal: '#8be07a', bunuelo: '#ffd25e'
+};
+
+function pickupPart(group, geometry, color, [x, y, z] = [0, 0, 0], [rx, ry, rz] = [0, 0, 0]) {
+  const mesh = new THREE.Mesh(geometry, mat(color));
+  mesh.position.set(x, y, z);
+  mesh.rotation.set(rx, ry, rz);
+  group.add(mesh);
+  return mesh;
+}
+
+function buildPickupModel(kind) {
+  const item = new THREE.Group();
+  switch (kind) {
+    case 'tinto': { // pocillo de tinto sobre su plato
+      pickupPart(item, new THREE.CylinderGeometry(3.2, 3.2, 0.4, 16), '#f4efe6', [0, 0.2, 0]);
+      pickupPart(item, new THREE.CylinderGeometry(2.2, 1.6, 3.4, 14), '#f7f3ec', [0, 2.1, 0]);
+      pickupPart(item, new THREE.CylinderGeometry(2.0, 2.0, 0.2, 14), '#3b2010', [0, 3.6, 0]);
+      pickupPart(item, new THREE.TorusGeometry(0.9, 0.3, 6, 12), '#f7f3ec', [2.4, 2.2, 0]);
+      break;
+    }
+    case 'arepa': { // arepa asada de pie, con marcas de parrilla
+      pickupPart(item, new THREE.CylinderGeometry(3.2, 3.2, 1.2, 14), '#e8c37a', [0, 3.2, 0], [Math.PI / 2, 0, 0]);
+      for (const dy of [-1.2, 0, 1.2]) {
+        pickupPart(item, new THREE.BoxGeometry(4.6, 0.35, 0.2), '#8a5a22', [0, 3.2 + dy, 0.65]);
+        pickupPart(item, new THREE.BoxGeometry(4.6, 0.35, 0.2), '#8a5a22', [0, 3.2 + dy, -0.65]);
+      }
+      break;
+    }
+    case 'aguapanela': { // vaso de aguapanela con limón
+      const glass = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.9, 1.5, 4.6, 14),
+        new THREE.MeshLambertMaterial({ color: '#e6f4ff', transparent: true, opacity: 0.35, depthWrite: false })
+      );
+      glass.position.y = 2.3;
+      item.add(glass);
+      pickupPart(item, new THREE.CylinderGeometry(1.75, 1.45, 3.6, 14), '#c4782a', [0, 1.9, 0]);
+      pickupPart(item, new THREE.CylinderGeometry(1.1, 1.1, 0.3, 10), '#b6d93b', [1.7, 4.5, 0], [0, 0, Math.PI / 2.4]);
+      break;
+    }
+    case 'lechona': { // lechoncito tolimense
+      const body = pickupPart(item, new THREE.IcosahedronGeometry(2.4, 1), '#c9763d', [0, 3, 0]);
+      body.scale.set(1.45, 1, 1);
+      pickupPart(item, new THREE.CylinderGeometry(0.8, 0.9, 1, 10), '#e09a6b', [3.6, 3, 0], [0, 0, Math.PI / 2]);
+      pickupPart(item, new THREE.ConeGeometry(0.6, 1.3, 4), '#a65a2a', [2.2, 5.2, 1]);
+      pickupPart(item, new THREE.ConeGeometry(0.6, 1.3, 4), '#a65a2a', [2.2, 5.2, -1]);
+      for (const [x, z] of [[1.8, 1.2], [1.8, -1.2], [-1.8, 1.2], [-1.8, -1.2]]) {
+        pickupPart(item, new THREE.CylinderGeometry(0.45, 0.45, 1.4, 6), '#a65a2a', [x, 0.9, z]);
+      }
+      break;
+    }
+    case 'tamal': { // tamal envuelto en hoja de plátano y amarrado
+      pickupPart(item, new THREE.BoxGeometry(5, 2.6, 4), '#3f7d2c', [0, 1.6, 0]);
+      pickupPart(item, new THREE.BoxGeometry(4.2, 0.4, 3.2), '#5b9e3c', [0, 3.05, 0]);
+      pickupPart(item, new THREE.BoxGeometry(0.35, 2.8, 4.2), '#e7d7a8', [1.2, 1.6, 0]);
+      pickupPart(item, new THREE.BoxGeometry(0.35, 2.8, 4.2), '#e7d7a8', [-1.2, 1.6, 0]);
+      pickupPart(item, new THREE.BoxGeometry(5.2, 2.8, 0.35), '#e7d7a8', [0, 1.6, 0]);
+      break;
+    }
+    case 'bunuelo': { // buñuelo dorado
+      pickupPart(item, new THREE.IcosahedronGeometry(2.6, 1), '#d99a3c', [0, 2.8, 0]);
+      pickupPart(item, new THREE.IcosahedronGeometry(1.1, 0), '#e8b25a', [1.2, 4.4, 0.8]);
+      break;
+    }
+    default: { // objeto desconocido: estrella dorada
+      pickupPart(item, new THREE.OctahedronGeometry(2.6, 0), '#FCD116', [0, 3, 0]);
+    }
+  }
+
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(3.6, 4.6, 24),
+    new THREE.MeshBasicMaterial({ color: PICKUP_GLOW[kind] || '#FCD116', transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.3;
+
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: PICKUP_GLOW[kind] || '#FCD116', transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }));
+  glow.scale.set(14, 14, 1);
+  glow.position.y = 5;
+
+  const group = new THREE.Group();
+  group.add(ring, glow, item);
+  group.userData = { item, ring, phase: Math.random() * Math.PI * 2 };
+  return group;
+}
+
 function updatePickups(pickups, time) {
   const seen = new Set();
   pickups.forEach(pu => {
     seen.add(pu.id);
-    let sprite = pickupSprites.get(pu.id);
-    if (!sprite) {
-      sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTexture(pu.emoji || '⭐'), transparent: true }));
-      sprite.scale.set(9, 9, 1);
-      sprite.userData.src = null;
-      pickupSprites.set(pu.id, sprite);
-      scene.add(sprite);
+    let model = pickupModels.get(pu.id);
+    if (!model) {
+      model = buildPickupModel(pu.kind);
+      model.position.set(pu.x, 0, pu.y);
+      pickupModels.set(pu.id, model);
+      scene.add(model);
     }
-    sprite.visible = !!pu.available;
-    sprite.position.set(pu.x, 7 + Math.sin(time / 260 + pu.x) * 1.2, pu.y);
+    model.visible = !!pu.available;
+    const { item, ring, phase } = model.userData;
+    item.position.y = 2 + Math.sin(time / 300 + phase) * 1;
+    item.rotation.y = time / 700 + phase;
+    ring.material.opacity = 0.5 + Math.sin(time / 220 + phase) * 0.2;
   });
-  pickupSprites.forEach((sprite, id) => { if (!seen.has(id)) sprite.visible = false; });
+  pickupModels.forEach((model, id) => { if (!seen.has(id)) model.visible = false; });
 }
 
 // ---------- Lluvia ----------
