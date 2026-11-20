@@ -521,7 +521,9 @@
         }
         const time = document.createElement('span');
         time.className = 'result-time';
-        time.textContent = r.finishTimeMs != null ? `${(r.finishTimeMs / 1000).toFixed(2)} s` : 'No terminó';
+        time.textContent = r.finishTimeMs != null
+          ? `${(r.finishTimeMs / 1000).toFixed(2)} s`
+          : `No terminó · ${r.lap || 0} ${r.lap === 1 ? 'vuelta' : 'vueltas'}`;
         li.append(pos, name, time);
         list.appendChild(li);
       });
