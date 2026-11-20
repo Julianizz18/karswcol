@@ -39,6 +39,9 @@ export const BOOST_DURATION_MS = 2500;
 export const BOOST_MULTIPLIER = 1.35;
 
 export const RAIN_DURATION_MS = 25000;
+// Aguacero de la carrera: no siempre llueve ni siempre en la misma vuelta.
+export const RAIN_CHANCE = 0.75;              // probabilidad de que llueva en una carrera
+export const RAIN_DURATION_JITTER = 0.3;      // duración entre 70 % y 130 % de RAIN_DURATION_MS
 export const RAIN_SPEED_FACTOR = 0.9;
 export const RAIN_GRIP_FACTOR = 0.72; // pista mojada: bastante menos agarre en curva
 // Condiciones del clima real que hacen arrancar la carrera con la pista mojada.

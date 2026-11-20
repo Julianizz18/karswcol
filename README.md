@@ -96,9 +96,10 @@ Implementado:
   reclamo; el orden de iteración del servidor (orden de llegada al `join`,
   sección 5.1) decide de forma determinista quién se lo lleva cuando dos
   jugadores compiten por el mismo objeto.
-- Evento dinámico de lluvia (HU04): se dispara la primera vez que algún
-  jugador completa la vuelta 1 y reduce la velocidad máxima de todos los
-  karts por 10s, con overlay visual en el cliente.
+- Evento dinámico de lluvia (HU04): cada carrera sortea si llueve (75 %),
+  en qué vuelta (de la 1 a la penúltima, cuando la completa el primer
+  jugador) y cuánto dura (25 s ± 30 %). Mientras llueve baja la velocidad
+  máxima y el agarre de todos los karts y se forman charcos.
 - Backend reestructurado en componentes independientes que reflejan la
   vista de aplicación de la propuesta (Connection Gateway, Matchmaking
   Service, Game Engine, Concurrency Resolver, Event Manager, Ranking and
