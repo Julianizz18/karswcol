@@ -70,6 +70,15 @@ export const wsBroadcastDuration = new client.Histogram({
   registers: [register]
 });
 
+// Seguridad: intentos de inicio de sesión. Un pico de "failure" puede ser un
+// ataque de fuerza bruta o tokens robados/vencidos (alerta LoginsFallidos).
+export const authLogins = new client.Counter({
+  name: 'karswcol_auth_logins_total',
+  help: 'Inicios y cierres de sesión, por proveedor (google | loadtest | logout) y resultado (success | failure).',
+  labelNames: ['provider', 'result'],
+  registers: [register]
+});
+
 export const joinRejections = new client.Counter({
   name: 'karswcol_join_rejections_total',
   help: 'Jugadores que no pudieron entrar a la sala, por motivo.',

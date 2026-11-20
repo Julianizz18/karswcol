@@ -7,7 +7,7 @@ import { SESSION_COOKIE, publicUser } from '../auth/authService.js';
 import { logger } from '../observability/logger.js';
 import {
   register, httpRequestsTotal, httpRequestDuration, wsConnections, wsConnectionsTotal,
-  wsMessagesReceived, wsMessagesSent, wsBytesSent, wsBroadcastDuration, joinRejections
+  wsMessagesReceived, wsMessagesSent, wsBytesSent, wsBroadcastDuration, joinRejections, authLogins
 } from '../observability/metrics.js';
 
 // Connection Gateway (HU01, componente "Connection Gateway" de la sección
@@ -145,9 +145,11 @@ async function handleAuthApi(req, res, auth, onLogout = () => {}) {
       const body = await readJsonBody(req);
       const { user, token } = await auth.loginWithGoogle(body.credential);
       logger.info('auth.login', { provider: 'google' });
+      authLogins.inc({ provider: 'google', result: 'success' });
       sendJson(res, 200, { user: publicUser(user) }, { 'Set-Cookie': sessionCookie(req, token, SESSION_MAX_AGE_SECONDS) });
     } catch (err) {
       logger.warn('auth.login_failed', { provider: 'google', reason: err.message });
+      authLogins.inc({ provider: 'google', result: 'failure' });
       sendJson(res, 401, { error: err.message || 'No se pudo iniciar sesión.' });
     }
   } else if (url === '/api/auth/loadtest' && req.method === 'POST' && auth.loadTestEnabled) {
@@ -155,9 +157,11 @@ async function handleAuthApi(req, res, auth, onLogout = () => {}) {
     try {
       const body = await readJsonBody(req);
       const { user, token } = auth.loginForLoadTest(req.headers['x-load-test-token'], body.name);
+      authLogins.inc({ provider: 'loadtest', result: 'success' });
       sendJson(res, 200, { user: publicUser(user) }, { 'Set-Cookie': sessionCookie(req, token, SESSION_MAX_AGE_SECONDS) });
     } catch (err) {
       logger.warn('auth.login_failed', { provider: 'loadtest', reason: err.message });
+      authLogins.inc({ provider: 'loadtest', result: 'failure' });
       sendJson(res, 401, { error: err.message });
     }
   } else if (url === '/api/auth/logout' && req.method === 'POST') {
@@ -166,6 +170,7 @@ async function handleAuthApi(req, res, auth, onLogout = () => {}) {
       auth.revokeSession(session);
       onLogout(session.sid);
       logger.info('auth.logout');
+      authLogins.inc({ provider: 'logout', result: 'success' });
     }
     sendJson(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, '', 0) });
   } else {

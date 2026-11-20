@@ -64,3 +64,27 @@ groups:
           severity: info
         annotations:
           summary: Open-Meteo no responde; las pistas usan su clima típico
+
+  # --------------------------------------------------- seguridad (detectar ataques)
+  - name: karswcol-seguridad
+    rules:
+      - alert: MensajesDescartadosPorLimite
+        expr: increase(karswcol_ws_messages_received_total{type="rate_limited"}[5m]) > 100
+        labels:
+          severity: warning
+        annotations:
+          summary: Un cliente supera el límite de 30 mensajes/s (posible abuso o cliente defectuoso)
+
+      - alert: ConexionesRechazadas
+        expr: increase(karswcol_ws_connections_total{result="rejected"}[5m]) > 20
+        labels:
+          severity: warning
+        annotations:
+          summary: Muchas conexiones WebSocket sin sesión válida u otro origen
+
+      - alert: LoginsFallidos
+        expr: increase(karswcol_auth_logins_total{result="failure"}[5m]) > 10
+        labels:
+          severity: warning
+        annotations:
+          summary: Muchos inicios de sesión fallidos (tokens inválidos o vencidos)

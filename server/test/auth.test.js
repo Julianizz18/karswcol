@@ -274,3 +274,17 @@ test('el logout de una sesión no afecta a otra', async () => {
   await fetch(`${base}/api/auth/logout`, { method: 'POST', headers: { cookie: a } });
   assert.equal((await fetch(`${base}/api/auth/me`, { headers: { cookie: b } })).status, 200);
 });
+
+test('los inicios de sesión exitosos y fallidos quedan en /metrics (trazabilidad)', async () => {
+  const metricValue = async (labels) => {
+    const text = await (await fetch(`${base}/metrics`)).text();
+    const line = text.split('\n').find(l => l.startsWith('karswcol_auth_logins_total{') && labels.every(x => l.includes(x)));
+    return line ? Number(line.split(' ').at(-1)) : 0;
+  };
+  const okBefore = await metricValue(['provider="google"', 'result="success"']);
+  const failBefore = await metricValue(['provider="google"', 'result="failure"']);
+  await login('token-valido');
+  await login('no-existe');
+  assert.equal(await metricValue(['provider="google"', 'result="success"']), okBefore + 1);
+  assert.equal(await metricValue(['provider="google"', 'result="failure"']), failBefore + 1);
+});
