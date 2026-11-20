@@ -18,6 +18,8 @@ export { TICK_MS } from './gameplayConfig.js';
 // conocida (×4 unidades): cubre de sobra lo que avanza un kart por tick.
 const TRACK_SEARCH_WINDOW = 30;
 
+const INPUT_KEYS = ['up', 'down', 'left', 'right'];
+
 function angleDiff(a, b) {
   return Math.atan2(Math.sin(a - b), Math.cos(a - b));
 }
@@ -62,8 +64,18 @@ export class GameEngine {
     p.boostUntil = 0;
   }
 
+  /**
+   * El input llega del cliente: solo se aceptan las cuatro teclas conocidas y
+   * se convierten a booleano. Así un mensaje con claves arbitrarias no crece
+   * el estado del jugador ni mete valores raros en la física.
+   */
   setInput(p, input) {
-    p.input = { ...p.input, ...input };
+    if (!input || typeof input !== 'object') return;
+    const next = { ...p.input };
+    for (const key of INPUT_KEYS) {
+      if (key in input) next[key] = input[key] === true;
+    }
+    p.input = next;
   }
 
   /**
