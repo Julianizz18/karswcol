@@ -242,6 +242,12 @@ export class RaceRoom {
     // Si el que se fue era el único que faltaba por estar listo, arranca la
     // cuenta regresiva para los que quedan (antes se quedaban esperando).
     if (this.state === 'lobby' && this.matchmaking.allReadyToStart()) this.startCountdown();
+    // Igual en resultados: si se fue el único que no había votado volver al
+    // lobby, no hay que esperar los 20 s completos.
+    if (this.state === 'results' && this.lobbyVotes.size > 0) {
+      this.lobbyVotes.delete(id);
+      this.checkLobbyVotes();
+    }
   }
 
   /** Reloj de carrera: hora actual menos todo el tiempo que estuvo en pausa. */
@@ -563,6 +569,12 @@ export class RaceRoom {
     const p = this.playerStates.get(by);
     if (!p || p.isBot) return;
     this.lobbyVotes.add(by);
+    this.checkLobbyVotes();
+  }
+
+  /** Vuelve al lobby si ya votaron todos los humanos que siguen en la sala. */
+  checkLobbyVotes() {
+    if (this.state !== 'results') return;
     const humans = [...this.playerStates.values()].filter(h => !h.isBot && !this.disconnected.has(h.id));
     const votes = humans.filter(h => this.lobbyVotes.has(h.id)).length;
     if (votes >= humans.length) {

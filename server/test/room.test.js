@@ -197,3 +197,28 @@ test('con random real todas las casillas se usan una sola vez', () => {
   room.startRace();
   assert.deepEqual([...room.gridOrder].sort(), ['1', '2', '3', '4', '5']);
 });
+
+test('si en resultados se va el único que no había votado, se vuelve al lobby', () => {
+  join('1', 'johan');
+  join('2', 'sara');
+  join('3', 'julian');
+  room.startRace();
+  room.finishRace('time_limit');
+  room.requestRestart('1');
+  room.requestRestart('2');
+  assert.equal(room.state, 'results');
+  room.handleDisconnect('3');
+  assert.equal(room.state, 'lobby');
+});
+
+test('si en resultados se va alguien que ya votó, los demás siguen esperando', () => {
+  join('1', 'johan');
+  join('2', 'sara');
+  join('3', 'julian');
+  room.startRace();
+  room.finishRace('time_limit');
+  room.requestRestart('1');
+  room.handleDisconnect('1');
+  assert.equal(room.state, 'results');
+  assert.deepEqual(messages.filter(m => m.kind === 'lobby_votes').at(-1), { type: 'event', kind: 'lobby_votes', votes: 0, total: 2 });
+});
