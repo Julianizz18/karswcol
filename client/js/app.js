@@ -670,6 +670,19 @@
     Net.send('input', { input: currentInput });
   });
 
+  // Si la ventana pierde el foco (Alt+Tab, cambio de pestaña) con una tecla
+  // presionada, el navegador nunca envía su keyup y el kart seguía
+  // acelerando o girando solo. Se sueltan todas las teclas.
+  function releaseAllKeys() {
+    if (!Object.values(currentInput).some(Boolean)) return;
+    Object.keys(currentInput).forEach(k => { currentInput[k] = false; });
+    Net.send('input', { input: currentInput });
+  }
+  window.addEventListener('blur', releaseAllKeys);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) releaseAllKeys();
+  });
+
   // ---------- Controles táctiles ----------
   // En celulares y tablets no hay teclado: botones en pantalla que alimentan
   // el mismo input que W/A/S/D. Se muestran si la pantalla es táctil (puntero
