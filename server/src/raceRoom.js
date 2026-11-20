@@ -92,6 +92,9 @@ export class RaceRoom {
     // Solo se entra desde el lobby: un jugador que llega a mitad de carrera
     // aparecería en la parrilla y bloquearía el cierre de la carrera.
     if (this.state !== 'lobby') return 'Hay una carrera en curso, intenta de nuevo cuando termine.';
+    // Un segundo "join" de la misma conexión lo recreaba en otra casilla de
+    // la parrilla, encima de otro jugador.
+    if (this.playerStates.has(id)) return 'Ya estás en la sala.';
     if (!this.matchmaking.hasCapacity()) return 'La sala está llena.';
     this.matchmaking.join(id, name, color, avatar);
     const slot = this.matchmaking.list().length - 1;
