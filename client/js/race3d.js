@@ -571,9 +571,27 @@ function andesProps(track, rand) {
   });
 }
 
+// Eje Cafetero: matas de café cargadas de granos rojos (cerezas).
+function cafeteroProps(track, rand) {
+  const bush = new THREE.IcosahedronGeometry(2.6, 1);
+  bush.scale(1, 1.35, 1);
+  const cherries = [[1.9, 3.4, 1], [-1.6, 4.2, 1.3], [0.4, 5.6, -1.7], [-1.2, 2.6, -1.8], [1.4, 5, -0.6]];
+  return scatterProps(track, rand, {
+    count: 110,
+    minGap: 14,
+    maxGap: 120,
+    parts: [
+      { geometry: piece(new THREE.CylinderGeometry(0.35, 0.45, 1.6, 5), 0, 0.8, 0), color: '#5a3e26' },
+      { geometry: piece(bush, 0, 4, 0), color: '#2d6a2a' },
+      ...cherries.map(([x, y, z]) => ({ geometry: piece(new THREE.IcosahedronGeometry(0.45, 0), x, y, z), color: '#c0262d' }))
+    ]
+  });
+}
+
 const REGIONAL_PROPS = {
   caribe: caribeProps,
-  andes: andesProps
+  andes: andesProps,
+  cafetero: cafeteroProps
 };
 
 function buildRegionalProps(track, rand) {
