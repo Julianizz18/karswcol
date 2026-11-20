@@ -608,11 +608,44 @@ function llanosProps(track, rand) {
   });
 }
 
+// Selva Amazónica: heliconias (hojas grandes y brácteas rojas y amarillas)
+// en el borde de la selva.
+function amazoniaProps(track, rand) {
+  const leaf = (angle, tilt) => {
+    const g = new THREE.ConeGeometry(1.3, 10, 4);
+    g.translate(0, 5, 0);
+    g.rotateZ(tilt);
+    g.rotateY(angle);
+    return g;
+  };
+  const bract = (y, side) => {
+    const g = new THREE.ConeGeometry(0.6, 1.8, 4);
+    g.rotateZ(side * Math.PI / 2.4);
+    g.translate(side * 0.7, y, 0);
+    return g;
+  };
+  return scatterProps(track, rand, {
+    count: 90,
+    minGap: 12,
+    maxGap: 100,
+    parts: [
+      { geometry: leaf(0, 0.35), color: '#2f7d32' },
+      { geometry: leaf(2.1, 0.45), color: '#2a6e2c' },
+      { geometry: leaf(4.2, 0.3), color: '#3a8a3a' },
+      { geometry: piece(new THREE.CylinderGeometry(0.2, 0.25, 8, 5), 0, 4, 0), color: '#4f7a2a' },
+      { geometry: bract(6.4, 1), color: '#d62828' },
+      { geometry: bract(7.4, -1), color: '#d62828' },
+      { geometry: bract(8.4, 1), color: '#f2b705' }
+    ]
+  });
+}
+
 const REGIONAL_PROPS = {
   caribe: caribeProps,
   andes: andesProps,
   cafetero: cafeteroProps,
-  llanos: llanosProps
+  llanos: llanosProps,
+  amazonia: amazoniaProps
 };
 
 function buildRegionalProps(track, rand) {
