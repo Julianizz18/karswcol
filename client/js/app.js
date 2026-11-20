@@ -290,6 +290,8 @@
   // controles (el servidor igual ignora sus cambios) y se les dice quién elige.
   const HOST_CONTROLS = '#track-picker button, #track-prev, #track-next, #difficulty-picker button, #time-picker button, #btn-toggle-bots';
   let lastHost = { id: null, player: null }; // del último lobby_update
+  let lastLobbyUpdate = null;
+  let renderLobby = () => {}; // se define en wireServerEvents
 
   function applyHostControls() {
     setHostControls(!lastHost.id || lastHost.id === selfId, lastHost.player);
@@ -412,8 +414,9 @@
     Net.on('joined', msg => {
       selfId = msg.id;
       // El servidor manda el lobby_update antes que "joined": en ese momento
-      // aún no se sabía quién era uno y los controles quedaban bloqueados.
-      applyHostControls();
+      // aún no se sabía quién era uno (sin etiqueta "Tú" y con los controles
+      // del anfitrión bloqueados). Se vuelve a dibujar con el id ya conocido.
+      if (lastLobbyUpdate) renderLobby(lastLobbyUpdate);
       Router.show('lobby');
     });
 
@@ -430,7 +433,9 @@
       }
     });
 
-    Net.on('lobby_update', msg => {
+    // Con nombre propio: "joined" la vuelve a llamar con el último mensaje.
+    renderLobby = msg => {
+      lastLobbyUpdate = msg;
       const list = document.getElementById('lobby-players');
       // Solo se anima la entrada de pilotos nuevos, no cada actualización.
       const previousIds = new Set([...list.children].map(li => li.dataset.id));
@@ -496,7 +501,8 @@
       // Después de pintar los selectores, para alcanzar también los botones recién creados.
       lastHost = { id: msg.hostId, player: host };
       applyHostControls();
-    });
+    };
+    Net.on('lobby_update', renderLobby);
 
     Net.on('countdown', msg => {
       // Semáforo de salida: se enciende una luz roja por segundo (3, 2, 1) y
