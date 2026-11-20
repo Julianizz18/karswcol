@@ -27,3 +27,20 @@ test('un segundo join de la misma conexión se rechaza y no cambia la parrilla',
   assert.equal(room.playerStates.get('1').x, before.x);
   assert.equal(room.playerStates.get('1').y, before.y);
 });
+
+test('si se va el único jugador que no estaba listo, arranca la cuenta regresiva', () => {
+  room.addPlayer('1', 'Julian', '#ECF0F1');
+  room.addPlayer('2', 'Sara', '#CE1126');
+  room.setReady('1');
+  assert.equal(room.state, 'lobby');
+  room.removePlayer('2');
+  assert.equal(room.state, 'countdown');
+  assert.deepEqual(messages.filter(m => m.type === 'countdown').at(-1), { type: 'countdown', seconds: 3 });
+});
+
+test('si se va un jugador y los que quedan no están listos, la sala sigue en el lobby', () => {
+  room.addPlayer('1', 'Julian', '#ECF0F1');
+  room.addPlayer('2', 'Sara', '#CE1126');
+  room.removePlayer('2');
+  assert.equal(room.state, 'lobby');
+});

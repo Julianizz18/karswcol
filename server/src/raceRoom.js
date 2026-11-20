@@ -112,9 +112,12 @@ export class RaceRoom {
     this.updatePlayerMetrics();
     if (this.matchmaking.isEmpty()) {
       this.resetToLobby();
-    } else {
-      this.sendLobbyUpdate();
+      return;
     }
+    this.sendLobbyUpdate();
+    // Si el que se fue era el único que faltaba por estar listo, arranca la
+    // cuenta regresiva para los que quedan (antes se quedaban esperando).
+    if (this.state === 'lobby' && this.matchmaking.allReadyToStart()) this.startCountdown();
   }
 
   /** Reloj de carrera: hora actual menos todo el tiempo que estuvo en pausa. */
