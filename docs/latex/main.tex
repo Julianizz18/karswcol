@@ -1,0 +1,484 @@
+% Documento de arquitectura de KARSWCOL (Release 2).
+% Compilar en Overleaf (pdfLaTeX) o con: latexmk -pdf main.tex
+% Los recuadros "PENDIENTE DEL EQUIPO" marcan datos que solo el equipo tiene
+% (sprints, burndown, ceremonias): completarlos antes de entregar.
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage{lmodern}
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,backgrounds,calc,babel}
+% Separador horizontal dentro de los nodos de clase/entidad (hline no funciona en TikZ).
+\newcommand{\sep}{\\[-1pt]\rule{3.2cm}{0.4pt}\\}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{karsRed}{HTML}{CE1126}
+\definecolor{karsYellow}{HTML}{FCD116}
+\definecolor{karsBlue}{HTML}{003893}
+
+\newtcolorbox{pendiente}{colback=yellow!12,colframe=orange!70!black,title=PENDIENTE DEL EQUIPO,fonttitle=\bfseries\small}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+
+\lstset{basicstyle=\ttfamily\small,breaklines=true,frame=single,columns=fullflexible}
+
+\tikzset{
+  comp/.style={draw,rounded corners,fill=karsBlue!8,minimum width=3.2cm,minimum height=0.9cm,align=center,font=\small},
+  ext/.style={draw,dashed,rounded corners,fill=gray!8,minimum width=3cm,minimum height=0.9cm,align=center,font=\small},
+  node0/.style={draw,thick,rounded corners,fill=karsYellow!15,inner sep=8pt},
+  arr/.style={-{Stealth[length=2.2mm]},thick}
+}
+
+\title{\textbf{KARSWCOL}\\[4pt]\large Carreras multijugador en tiempo real con identidad colombiana\\[2pt]\normalsize Documento de arquitectura --- Release 2}
+\author{Julián Tinjacá \and Sara Arteaga \and Johan Sebastián Beltrán\\[4pt]
+\small Arquitecturas de Software (ARSW) --- Escuela Colombiana de Ingeniería Julio Garavito}
+\date{Noviembre de 2026}
+
+\begin{document}
+\maketitle
+\begin{center}
+\small Juego: \url{https://karswcol.onrender.com} \quad
+Repositorio: \url{https://github.com/Julianizz18/karswcol}
+\end{center}
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Introducción}
+\subsection{Objetivo}
+Describir la arquitectura de KARSWCOL, un juego de carreras multijugador en
+tiempo real para navegador, y justificar cómo atiende los atributos de
+calidad del Release 2 (rendimiento, escalabilidad, seguridad, disponibilidad,
+portabilidad, mantenibilidad y observabilidad), con evidencia ejecutable.
+
+\subsection{Alcance}
+Cubre el cliente web, el servidor autoritativo (Node.js), el despliegue en
+Render, la capa de observabilidad (Prometheus, Grafana, Loki), las pruebas
+automáticas, las pruebas de carga con k6 y el pipeline de CI/CD. Las
+decisiones que no se implementaron por la restricción de costo del equipo
+(despliegue distribuido con balanceador) se documentan como arquitectura
+objetivo y se distinguen explícitamente de lo implementado.
+
+\subsection{Audiencia}
+Docente y monitores de ARSW, y desarrolladores que quieran operar o
+extender el sistema.
+
+% =====================================================================
+\section{Visión general}
+\subsection{Descripción del sistema}
+Hasta ocho jugadores (completados con bots si se desea) corren en circuitos
+inspirados en trazados de Fórmula 1 y ambientados en cinco regiones de
+Colombia (Caribe, Andes, Eje Cafetero, Llanos y Amazonía), con vehículos
+icónicos (TransMilenio, taxi, burro, avión de Avianca, metro de Medellín),
+objetos de la cocina colombiana (tinto, arepa, aguapanela, lechona, tamal y
+buñuelo) y el clima real de cada región. El servidor es la única fuente de
+verdad: simula la carrera a 20~Hz y difunde el estado por WebSocket; el
+cliente solo envía intención y dibuja (2D o 3D con Three.js).
+
+\subsection{Requerimientos funcionales clave}
+\begin{itemize}
+  \item HU01 --- Iniciar sesión con Google, elegir vehículo y entrar a la sala.
+  \item HU02 --- Correr con física autoritativa (agarre, derrape, choques, vueltas por puntos de control).
+  \item HU03 --- Recoger objetos compartidos con resolución de conflictos.
+  \item HU04 --- Eventos dinámicos: aguacero, pista mojada, charcos y aquaplaning.
+  \item HU05 --- Resultados con posición, tiempo total y mejor vuelta.
+  \item HU06 --- Reconexión y continuidad de la sesión.
+  \item Release 2 --- Anfitrión de sala, pausa compartida con límite, votación para volver al lobby, espera con entrada automática, calidad gráfica adaptativa.
+\end{itemize}
+
+\subsection{Requerimientos no funcionales clave}
+\begin{tabularx}{\textwidth}{lL}
+\toprule
+\textbf{Atributo} & \textbf{Meta}\\\midrule
+Rendimiento & Estado cada 50~ms; gap entre estados p95 $<$ 100~ms; HTTP p95 $<$ 300~ms; errores $<$ 1~\%\\
+Seguridad & Sesión firmada y revocable; autorización por rol (anfitrión); límite de mensajes\\
+Disponibilidad & Detección de caída en $\le$ 30~s; reconexión automática\\
+Mantenibilidad & Cobertura $\ge$ 80~\% en backend y frontend; Quality Gate en verde\\
+Portabilidad & Misma imagen Docker en nube y on-premise, sin cambios de código\\
+Observabilidad & Métricas, logs, dashboards y alertas reproducibles\\
+\bottomrule
+\end{tabularx}
+
+% =====================================================================
+\section{Marco metodológico}
+\subsection{Metodología}
+Scrum, con Azure DevOps como herramienta oficial (Product Backlog, Sprint
+Backlog, tablero y Burndown Chart). Release 1: sprints 1--5; Release 2:
+sprints 6--10.
+
+\subsection{Criterios DoR / DoD}
+\textbf{Definition of Ready}: historia con criterios de aceptación
+verificables, estimada en puntos, sin dependencias bloqueantes y entendida
+por el equipo.\\
+\textbf{Definition of Done}: código en \texttt{master} con su prueba
+automática; pipeline de CI en verde (pruebas, cobertura, Quality Gate,
+imagen Docker); desplegado en Render; criterios de aceptación verificados en
+el juego; documentación actualizada.
+
+\subsection{Planificación y estimación}
+\begin{pendiente}
+Completar con los datos de Azure DevOps: historias por sprint, puntos
+estimados, capacidad (capacity) del equipo, velocidad por sprint y captura
+del Burndown Chart de cada sprint del Release 2.
+\end{pendiente}
+
+% =====================================================================
+\section{Atributos de calidad}
+Cada escenario sigue la plantilla fuente / estímulo / artefacto / entorno /
+respuesta / medida. El detalle completo y la lista de pruebas está en la
+carpeta \texttt{docs/} del repositorio.
+
+\subsection{Rendimiento}
+\begin{tabularx}{\textwidth}{lL}
+\toprule
+Fuente / estímulo & 40 jugadores y espectadores conectados más 5 visitantes por segundo cargando el cliente\\
+Artefacto / entorno & Gateway y game loop, operación normal\\
+Respuesta & El servidor sostiene el tick de 50~ms y atiende HTTP y WebSocket sin errores\\
+Medida & HTTP p95 $<$ 300~ms; gap entre estados p95 $<$ 100~ms; errores $<$ 1~\%\\
+\bottomrule
+\end{tabularx}
+Resultados de carga, estrés y picos en la sección~\ref{sec:resultados-rendimiento}.
+
+\subsection{Escalabilidad y disponibilidad}
+\begin{tabularx}{\textwidth}{lL}
+\toprule
+Fuente / estímulo & La instancia se cae o se reinicia durante una carrera\\
+Artefacto / entorno & Servicio \texttt{karswcol} en Render\\
+Respuesta & El cliente avisa y reconecta con espera creciente; al volver recupera su kart (30~s de gracia); Prometheus alerta \texttt{KarswcolCaido}\\
+Medida & Detección $\le$ 30~s; reconexión $\le$ 15~s tras volver el servidor; 0 acciones manuales\\
+\bottomrule
+\end{tabularx}
+
+\paragraph{SLA y cálculo.} Render no publica SLA para planes distintos de
+Enterprise; se usa un supuesto conservador de 0{,}995. Para el login de
+Google se toma como referencia el SLA de Cloud Identity (0{,}999). Open-Meteo
+no entra al cálculo porque tiene respaldo (clima típico por pista).
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+Despliegue & $A_{total}$ & Downtime mensual & Downtime anual\\\midrule
+Actual (serie): $0{,}995 \times 0{,}999$ & 99{,}40~\% & 4~h 19~min & 52~h 31~min\\
+Objetivo: LB $\times\,[1-(1-0{,}995)^2] \times 0{,}999$ & 99{,}89~\% & 48{,}6~min & 9~h 51~min\\
+\bottomrule
+\end{tabular}
+\end{center}
+El despliegue actual alcanza ``dos nueves''; con dos instancias en paralelo
+el sistema se acerca a tres nueves y el factor limitante pasa a ser el login
+de Google. Puntos únicos de falla actuales: la instancia de Render, el estado
+en memoria y el proveedor de identidad para nuevos inicios de sesión. El
+cálculo se contrasta con la disponibilidad observada en Grafana
+(\texttt{avg\_over\_time(up[\$\_\_range])}) y con la tasa de errores de k6.
+
+\subsection{Seguridad}
+Tres escenarios (detalle en \texttt{docs/seguridad.md}):
+\begin{description}
+  \item[S1 Autenticación y sesión.] Una cookie alterada, vencida o de una sesión cerrada se rechaza (401 / WebSocket 4401); el cierre de sesión revoca la sesión en el servidor y desconecta sus pestañas. Medida: 100~\% de rechazos, revocación inmediata.
+  \item[S2 Autorización.] Solo quien entró a la sala la controla, solo el anfitrión la configura y una cuenta tiene un solo kart. Medida: 0 cambios de estado provocados por actores sin permiso.
+  \item[S3 Protección frente a ataques.] Un cliente que inunda el WebSocket ve descartado el exceso (30 msg/s, ráfaga 60) y es desconectado a los 300 descartes; la entrada mal formada se ignora; Prometheus alerta. Medida: el servicio sigue atendiendo a los demás.
+\end{description}
+
+\subsection{Portabilidad}
+Escenario de migración Cloud $\rightarrow$ On-Premise: la misma imagen
+(\texttt{node:22-alpine}, sin root, con \texttt{HEALTHCHECK}) corre en Render
+y en un servidor propio con \texttt{docker compose up --build}, incluida la
+observabilidad. Medida: $\le$ 30~min y 0 cambios de código.
+
+\subsection{Mantenibilidad}
+Escenario de inspección continua: en cada push, GitHub Actions (reusable
+workflows) ejecuta las pruebas con cobertura, SonarCloud analiza el código y
+espera el Quality Gate, y se construye y prueba la imagen Docker.
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+Capa & Líneas & Ramas & Meta\\\midrule
+Backend (\texttt{server/src}) & 95{,}1~\% & 82{,}9~\% & $\ge$ 80~\%\\
+Frontend (\texttt{client/js}) & 95{,}1~\% & 84{,}9~\% & $\ge$ 80~\%\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Observabilidad}
+El gateway expone \texttt{/metrics} (Prometheus) y \texttt{/health}; los logs
+son JSON estructurados recogidos por Promtail hacia Loki. Grafana se
+aprovisiona con los dashboards ``KARSWCOL --- Servidor'' y ``KARSWCOL ---
+Pruebas de carga (k6)''. Condiciones de degradación con alerta: servidor
+caído (\texttt{up == 0}), tick p95 $>$ 35~ms, intervalo entre ticks p95 $>$
+75~ms, lag del event loop p99 $>$ 100~ms, memoria $>$ 400~MB, errores 5xx, y
+alertas de seguridad (mensajes descartados, conexiones rechazadas, inicios
+de sesión fallidos).
+
+% =====================================================================
+\section{Vista de arquitectura}
+\subsection{Estilo arquitectónico}
+Cliente--servidor con \textbf{servidor autoritativo} y comunicación
+\textbf{orientada a eventos} por WebSocket. El backend se organiza en
+componentes de responsabilidad única (Gateway, Matchmaking, Game Engine,
+Concurrency Resolver, Event Manager, Ranking, Weather, Observabilidad)
+orquestados por la sala (\texttt{RaceRoom}).
+
+\subsection{Modelo cloud}
+PaaS (Render, Web Service con Docker) para el juego; servicios SaaS
+externos para identidad (Google) y clima (Open-Meteo); GitHub Actions para
+CI y SonarCloud para análisis estático.
+
+\subsection{Decisiones clave}
+\begin{tabularx}{\textwidth}{lL}
+\toprule
+\textbf{Decisión} & \textbf{Justificación}\\\midrule
+Servidor autoritativo a 20~Hz & Evita trampas y da un orden total de eventos por tick, que resuelve la concurrencia sin bloqueos\\
+WebSocket con difusión por tick & Latencia baja y estado consistente para todos; el cliente interpola a 60~fps\\
+Sesión firmada (HMAC) en cookie HttpOnly & El WebSocket se autentica con la misma cookie; sin estado en el servidor salvo la lista de revocación\\
+Una sala por proceso & El game loop necesita memoria local y latencia mínima; se escala agregando instancias que alojan salas\\
+Render gratuito & Restricción de costo del equipo; se documenta la arquitectura objetivo distribuida\\
+\bottomrule
+\end{tabularx}
+
+\subsection{Balanceo, despliegue distribuido y tiempo real}
+La arquitectura objetivo coloca un balanceador con afinidad de sesión
+(\emph{sticky}) delante de varias instancias del servidor, de modo que el
+WebSocket de un jugador permanezca en la instancia que aloja su sala. Redis
+(ya orquestado) mantiene el directorio de salas, las sesiones revocadas y el
+canal Pub/Sub entre instancias; PostgreSQL (ya orquestado) guarda historial
+y ranking. Por la restricción de costo, el despliegue implementado usa una
+sola instancia en Render; la justificación cuantitativa está en el cálculo
+de disponibilidad.
+
+% =====================================================================
+\section{Diagramas UML}
+\subsection{Contexto}
+\begin{center}
+\begin{tikzpicture}[node distance=1.2cm and 1.6cm]
+  \node[comp,fill=karsYellow!25] (sys) {KARSWCOL};
+  \node[ext,left=of sys] (player) {Jugador\\(navegador)};
+  \node[ext,above right=0.6cm and 1.6cm of sys] (google) {Google Identity};
+  \node[ext,right=of sys] (meteo) {Open-Meteo};
+  \node[ext,below right=0.6cm and 1.6cm of sys] (ops) {Operador\\(Grafana)};
+  \draw[arr] (player) -- node[above,font=\scriptsize]{HTTPS / WSS} (sys);
+  \draw[arr] (sys) -- node[sloped,above,font=\scriptsize]{verifica ID token} (google);
+  \draw[arr] (sys) -- node[above,font=\scriptsize]{clima} (meteo);
+  \draw[arr] (ops) -- node[sloped,below,font=\scriptsize]{métricas y logs} (sys);
+\end{tikzpicture}
+\end{center}
+
+\subsection{Componentes}
+\begin{center}
+\begin{tikzpicture}[node distance=0.55cm and 0.5cm]
+  \node[comp] (gw) {Connection Gateway\\\scriptsize HTTP, WebSocket, /metrics};
+  \node[comp,below=of gw] (room) {RaceRoom\\\scriptsize orquestador de sala};
+  \node[comp,left=of room,xshift=-0.4cm] (auth) {Auth Service};
+  \node[comp,below left=0.7cm and -0.6cm of room] (mm) {Matchmaking};
+  \node[comp,below=0.7cm of room] (ge) {Game Engine};
+  \node[comp,below right=0.7cm and -0.6cm of room] (cr) {Concurrency\\Resolver};
+  \node[comp,below=of mm] (em) {Event Manager};
+  \node[comp,below=of ge] (rk) {Ranking};
+  \node[comp,below=of cr] (bot) {Bot Driver};
+  \node[comp,right=of room,xshift=0.4cm] (wx) {Weather Service};
+  \node[comp,above=of gw] (client) {Game Client\\\scriptsize app.js, race3d.js};
+  \draw[arr] (client) -- node[right,font=\scriptsize]{WebSocket} (gw);
+  \draw[arr] (gw) -- (room);
+  \draw[arr] (gw) -| (auth);
+  \foreach \t in {mm,ge,cr,em,rk,bot} \draw[arr] (room) -- (\t);
+  \draw[arr] (room) -- (wx);
+\end{tikzpicture}
+\end{center}
+
+\subsection{Clases (núcleo del servidor)}
+\begin{center}
+\begin{tikzpicture}[node distance=0.6cm and 0.8cm, every node/.style={font=\scriptsize}]
+  \node[draw,align=left,fill=white] (room) {\textbf{RaceRoom}\sep state, trackId, hostId\\ playerStates, disconnected\sep join(), handleDisconnect()\\ setReady(), togglePause()\\ startRace(), tick(), finishRace()};
+  \node[draw,align=left,fill=white,below left=of room] (ge) {\textbf{GameEngine}\sep createPlayerState()\\ setInput(), step()\\ evaluateCheckpoint()};
+  \node[draw,align=left,fill=white,below=of room] (cr) {\textbf{ConcurrencyResolver}\sep pickups[respawnAt]\sep tryClaim(), serialize()};
+  \node[draw,align=left,fill=white,below right=of room] (em) {\textbf{EventManager}\sep rainLap, rainDurationMs\sep onLapCompleted(), tick()};
+  \node[draw,align=left,fill=white,left=of room] (mm) {\textbf{MatchmakingService}\sep players\sep join(), hasCapacity()\\ allReadyToStart()};
+  \node[draw,align=left,fill=white,right=of room] (rk) {\textbf{RankingService}\sep buildRanking()\\ persistRace()};
+  \foreach \t in {ge,cr,em,mm,rk} \draw[-{Diamond[open]},thick] (\t) -- (room);
+\end{tikzpicture}
+\end{center}
+
+\subsection{Entidad--Relación (modelo objetivo en PostgreSQL)}
+El estado de juego vive en memoria; el modelo persistente objetivo para el
+ranking es:
+\begin{center}
+\begin{tikzpicture}[node distance=2.2cm, every node/.style={font=\scriptsize}]
+  \node[draw,align=left] (u) {\textbf{jugador}\sep \underline{sub} (Google)\\ nombre, foto};
+  \node[draw,align=left,right=of u] (r) {\textbf{resultado}\sep \underline{carrera\_id}, \underline{sub}\\ posición, tiempo\_ms, mejor\_vuelta\_ms};
+  \node[draw,align=left,right=of r] (c) {\textbf{carrera}\sep \underline{id}\\ pista, dificultad, clima, fecha};
+  \draw (u) -- node[above]{1 \quad N} (r);
+  \draw (r) -- node[above]{N \quad 1} (c);
+\end{tikzpicture}
+\end{center}
+
+\subsection{Secuencia: entrar a la sala y recoger un objeto}
+\begin{center}
+\begin{tikzpicture}[every node/.style={font=\scriptsize}]
+  \foreach \x/\n in {0/Cliente,3.5/Gateway,7/RaceRoom,10.5/ConcurrencyResolver} {
+    \node[draw,fill=karsBlue!8] at (\x,0) {\n};
+    \draw[dashed] (\x,-0.3) -- (\x,-7.2);
+  }
+  \draw[arr] (0,-0.8) -- node[above]{WS + cookie de sesión} (3.5,-0.8);
+  \draw[arr] (0,-1.5) -- node[above]{join} (3.5,-1.5);
+  \draw[arr] (3.5,-2.0) -- node[above]{join(conn, cuenta)} (7,-2.0);
+  \draw[arr,dashed] (7,-2.5) -- node[above]{lobby\_update (a todos)} (0,-2.5);
+  \draw[arr,dashed] (3.5,-3.0) -- node[above]{joined (id)} (0,-3.0);
+  \draw[arr] (0,-3.7) -- node[above]{input \{up,left\}} (3.5,-3.7);
+  \draw[arr] (3.5,-4.2) -- node[above]{setInput} (7,-4.2);
+  \node[draw,fill=yellow!20] at (7,-4.9) {tick (50 ms)};
+  \draw[arr] (7,-5.5) -- node[above]{tryClaim(jugador)} (10.5,-5.5);
+  \draw[arr,dashed] (10.5,-6.0) -- node[above]{pickup\_claimed} (7,-6.0);
+  \draw[arr,dashed] (7,-6.7) -- node[above]{event + state (a todos)} (0,-6.7);
+\end{tikzpicture}
+\end{center}
+
+\subsection{Despliegue}
+\begin{center}
+\begin{tikzpicture}[node distance=0.8cm and 1.2cm]
+  \node[comp] (browser) {Navegador\\\scriptsize cliente web (Three.js)};
+  \node[comp,right=2.2cm of browser] (svc) {Contenedor karswcol\\\scriptsize Node 22 (gateway + game loop + cliente estático)};
+  \begin{scope}[on background layer]
+    \node[node0,fit=(svc),label={[font=\scriptsize]above:{Render (PaaS, plan gratuito, HTTPS)}}] {};
+  \end{scope}
+  \node[ext,below=1.3cm of svc] (google) {Google Identity};
+  \node[ext,right=0.6cm of google] (meteo) {Open-Meteo};
+  \node[ext,below=1.3cm of browser] (gh) {GitHub Actions\\\scriptsize CI + SonarCloud};
+  \draw[arr] (browser) -- node[above,font=\scriptsize]{HTTPS / WSS} (svc);
+  \draw[arr] (svc) -- (google);
+  \draw[arr] (svc) -- (meteo);
+  \draw[arr] (gh) -- node[sloped,below,font=\scriptsize]{push $\rightarrow$ redeploy} (svc);
+\end{tikzpicture}
+\end{center}
+Entorno de pruebas reproducible (un solo host, Docker Compose): gateway,
+Redis, PostgreSQL, Prometheus, Grafana, Loki, Promtail y k6.
+
+\subsection{Actividades: ciclo de una carrera}
+\begin{center}
+\begin{tikzpicture}[node distance=0.45cm, every node/.style={font=\scriptsize}]
+  \node[draw,rounded corners] (a) {Lobby: entrar, elegir (anfitrión), listo};
+  \node[draw,rounded corners,below=of a] (b) {Cuenta regresiva 3-2-1};
+  \node[draw,rounded corners,below=of b] (c) {Carrera: tick 50 ms (input, física, objetos, lluvia, estado)};
+  \node[draw,diamond,aspect=3,below=of c] (d) {¿todos llegaron o se agotó el tiempo?};
+  \node[draw,rounded corners,below=of d] (e) {Resultados y votación para volver al lobby};
+  \draw[arr] (a) -- (b); \draw[arr] (b) -- (c); \draw[arr] (c) -- (d);
+  \draw[arr] (d) -- node[right]{sí} (e);
+  \draw[arr] (d.east) -- ++(1.2,0) |- node[near start,right]{no} (c.east);
+  \draw[arr] (e.west) -- ++(-1.4,0) |- (a.west);
+\end{tikzpicture}
+\end{center}
+
+% =====================================================================
+\section{Detalles tecnológicos}
+\begin{tabularx}{\textwidth}{lL}
+\toprule
+Lenguajes y frameworks & JavaScript (ES2022); Node.js 22 con \texttt{ws}, \texttt{google-auth-library}, \texttt{prom-client}; cliente sin framework con Three.js para la vista 3D\\
+Infraestructura & Render (Docker, HTTPS), Google Identity Services, Open-Meteo\\
+DevOps y CI/CD & GitHub Actions con reusable workflows (pruebas y cobertura, SonarCloud con Quality Gate, imagen Docker); despliegue automático en Render; Azure DevOps para Scrum\\
+Docker / Compose & \texttt{server/Dockerfile} (Node 22, sin root, HEALTHCHECK); \texttt{docker-compose.yml} con gateway, Redis, PostgreSQL y observabilidad\\
+Observabilidad & Prometheus (métricas y alertas), Grafana (dashboards aprovisionados), Loki y Promtail (logs)\\
+Pruebas & \texttt{node:test}; jsdom para el cliente; k6 para carga, estrés y picos\\
+\bottomrule
+\end{tabularx}
+
+% =====================================================================
+\section{Seguridad del sistema}
+\subsection{Autenticación y autorización}
+Inicio de sesión con Google Identity Services: el servidor verifica el ID
+token (firma, audiencia y vencimiento) y emite una cookie de sesión propia
+firmada con HMAC-SHA256 (\texttt{HttpOnly}, \texttt{SameSite=Lax},
+\texttt{Secure} bajo HTTPS, 12~h deslizantes). Cada sesión tiene un
+identificador revocable. La autorización se aplica en el servidor: conexión
+del mismo origen con sesión válida, control de la sala solo tras entrar,
+configuración solo para el anfitrión, un kart por cuenta.
+
+\subsection{Cifrado}
+TLS terminado por Render (HTTPS y WSS). Las cookies se firman (integridad);
+no se almacenan datos personales más allá de la sesión.
+
+\subsection{Buenas prácticas}
+Sin secretos en el repositorio; contenedor sin root; validación de entrada;
+límite de tamaño de cuerpo HTTP (16~KB) y de mensajes WebSocket; métricas
+protegidas con token en despliegues públicos; endpoint de pruebas de carga
+deshabilitado en producción.
+
+\subsection{Evidencias de los tres escenarios}
+Pruebas en \texttt{server/test/auth.test.js}, \texttt{room.test.js},
+\texttt{input.test.js}, \texttt{metrics-auth.test.js} y
+\texttt{client-lobby.test.js}; alertas validadas con \texttt{promtool}.
+\begin{pendiente}
+Adjuntar la aprobación del profesor de los tres escenarios y capturas de
+las alertas de seguridad en Prometheus/Grafana.
+\end{pendiente}
+
+% =====================================================================
+\section{Bitácora de ceremonias}
+\begin{pendiente}
+Sprint 0; Release 1 (sprints 1--5) y Release 2 (sprints 6--10): fecha,
+objetivo y resultado de cada Planning, Review y Retrospectiva, con enlaces
+o capturas de Azure DevOps. Lecciones aprendidas del equipo.
+\end{pendiente}
+
+% =====================================================================
+\section{Conclusiones y recomendaciones}
+\subsection{Logros}
+Juego multijugador en tiempo real desplegado y accesible; servidor
+autoritativo con resolución determinista de concurrencia probada con
+clientes simultáneos; cobertura del 95~\% en ambas capas; pipeline con
+análisis estático; observabilidad completa con alertas; pruebas de carga,
+estrés y picos con resultados reproducibles.
+
+\subsection{Riesgos}
+Instancia única sin SLA (plan gratuito) y arranque en frío; estado en
+memoria; dependencia de Google para nuevos inicios de sesión.
+
+\subsection{Mejora continua}
+Implementar la arquitectura objetivo (balanceador, varias instancias,
+Redis y PostgreSQL); monitor externo de disponibilidad; persistencia del
+ranking.
+
+\subsection{Resultados de rendimiento, disponibilidad y observabilidad}
+\label{sec:resultados-rendimiento}
+Ver \texttt{docs/rendimiento.md} (tablas generadas con
+\texttt{load-tests/resumen.mjs} a partir de los resúmenes de k6) y
+\texttt{docs/disponibilidad.md}.
+\begin{pendiente}
+Copiar aquí las tablas finales de \texttt{docs/rendimiento.md} y las
+capturas de Grafana de cada prueba (antes, durante y después).
+\end{pendiente}
+
+% =====================================================================
+\section{Anexos}
+\subsection*{Glosario}
+\begin{description}
+  \item[Tick] Ciclo fijo de simulación del servidor (50~ms).
+  \item[Gap entre estados] Tiempo entre dos mensajes de estado consecutivos en el cliente.
+  \item[Anfitrión] Jugador con más antigüedad en la sala; configura pista, hora, dificultad y bots.
+  \item[TPS / TPM] Transacciones por segundo / por minuto.
+\end{description}
+\subsection*{Repositorios y evidencias}
+\begin{itemize}
+  \item GitHub: \url{https://github.com/Julianizz18/karswcol} (CI en \emph{Actions})
+  \item Azure DevOps: \href{https://dev.azure.com/kartombia-arsw/Proyecto\%20ARSW\%202026-2}{dev.azure.com/kartombia-arsw (Proyecto ARSW 2026-2)}
+  \item Scripts k6: \texttt{load-tests/}; resultados: \texttt{docs/evidencias/k6/}
+  \item Dashboards: \texttt{observability/grafana/dashboards/}; alertas: \texttt{observability/prometheus/alerts.yml}
+\end{itemize}
+\subsection*{Referencias}
+\begin{enumerate}
+  \item L. Bass, P. Clements y R. Kazman, \emph{Software Architecture in Practice}, 4.\textsuperscript{a} ed. Addison-Wesley, 2021.
+  \item Google Cloud, ``Identity Platform Service Level Agreement''. \url{https://cloud.google.com/identity-platform/sla}
+  \item Google Cloud, ``Cloud Identity Service Level Agreement''. \url{https://cloud.google.com/terms/identity/sla}
+  \item Render, ``Status''. \url{https://status.render.com}
+  \item Grafana Labs, ``k6 documentation''. \url{https://grafana.com/docs/k6/latest/}
+  \item Prometheus, ``Alerting rules''. \url{https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/}
+\end{enumerate}
+
+\end{document}
