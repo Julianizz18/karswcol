@@ -131,7 +131,11 @@ function measureQuality(now) {
 const canvas = document.getElementById('race-canvas-3d');
 let renderer = null;
 try {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  // Punto de inyección para las pruebas automáticas (jsdom no tiene WebGL):
+  // pasan un renderer falso y así se ejecuta toda la construcción de la
+  // escena. En el navegador no existe y se usa el WebGLRenderer real.
+  const createRenderer = window.__KARSWCOL_TEST_RENDERER__ || (opts => new THREE.WebGLRenderer(opts));
+  renderer = createRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(pixelRatio());
   renderer.setSize(canvas.width, canvas.height, false);
   // Sombras del sol (solo se proyectan con cielo despejado o parcial, ver Clima).
