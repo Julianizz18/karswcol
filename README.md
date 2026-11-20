@@ -47,7 +47,9 @@ Redis y PostgreSQL.
 
 ### Observabilidad y pruebas de carga
 
-- Métricas Prometheus en `GET /metrics`, estado en `GET /health`.
+- Métricas Prometheus en `GET /metrics`, estado en `GET /health`. Si se define
+  `METRICS_TOKEN`, `/metrics` exige `Authorization: Bearer <token>` (en Render
+  se genera solo; en Docker Compose local queda abierto para Prometheus).
 - Logs JSON estructurados, consultables en Grafana vía Loki.
 - Dashboards "KARSWCOL — Servidor" y "KARSWCOL — Pruebas de carga (k6)" y
   reglas de alerta, todo aprovisionado automáticamente.

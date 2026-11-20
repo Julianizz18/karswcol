@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -140,7 +141,13 @@ async function handleAuthApi(req, res, auth) {
   return true;
 }
 
-export function createGateway({ clientDir, room, auth }) {
+function hasBearerToken(req, expected) {
+  const given = Buffer.from(String(req.headers.authorization || ''));
+  const wanted = Buffer.from(`Bearer ${expected}`);
+  return given.length === wanted.length && crypto.timingSafeEqual(given, wanted);
+}
+
+export function createGateway({ clientDir, room, auth, metricsToken = process.env.METRICS_TOKEN || '' }) {
   const clients = new Map(); // id -> ws
   let nextId = 1;
   const startedAt = Date.now();
@@ -158,6 +165,13 @@ export function createGateway({ clientDir, room, auth }) {
       return true;
     }
     if (url === '/metrics' && req.method === 'GET') {
+      // En un despliegue público (Render) METRICS_TOKEN protege las métricas
+      // internas; sin definir (Docker Compose local) quedan abiertas para Prometheus.
+      if (metricsToken && !hasBearerToken(req, metricsToken)) {
+        res.writeHead(401, { 'WWW-Authenticate': 'Bearer' });
+        res.end('Unauthorized');
+        return true;
+      }
       res.writeHead(200, { 'Content-Type': register.contentType, 'Cache-Control': 'no-store' });
       res.end(await register.metrics());
       return true;

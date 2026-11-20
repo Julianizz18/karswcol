@@ -15,6 +15,8 @@ services:
         sync: false          # se pide al crear el servicio en el dashboard
       - key: SESSION_SECRET
         generateValue: true  # Render genera un valor aleatorio
+      - key: METRICS_TOKEN
+        generateValue: true  # /metrics exige "Authorization: Bearer <token>"
       - key: LOG_LEVEL
         value: info
       # LOAD_TEST_TOKEN se deja sin definir: login sintético de k6 deshabilitado.
