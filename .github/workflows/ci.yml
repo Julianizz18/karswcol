@@ -1,0 +1,27 @@
+# CI de KARSWCOL: compone los workflows reutilizables (reusable-*.yml).
+#   1. Pruebas de servidor y cliente con cobertura.
+#   2. Análisis estático en SonarCloud con Quality Gate (usa la cobertura).
+#   3. Imagen Docker de producción construida y probada.
+# En Render se puede activar "Auto-Deploy: After CI Checks Pass" para que
+# solo despliegue si este workflow pasa.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  tests:
+    uses: ./.github/workflows/reusable-node-tests.yml
+    with:
+      node-version: '22'
+
+  sonarcloud:
+    needs: tests
+    uses: ./.github/workflows/reusable-sonarcloud.yml
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  docker:
+    uses: ./.github/workflows/reusable-docker.yml

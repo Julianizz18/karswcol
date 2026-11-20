@@ -1,0 +1,31 @@
+# Workflow reutilizable: construye la imagen de producción, la arranca y
+# verifica /health y que sirva el cliente (portabilidad con Docker).
+name: Imagen Docker (reutilizable)
+
+on:
+  workflow_call:
+    inputs:
+      dockerfile:
+        type: string
+        default: server/Dockerfile
+
+jobs:
+  docker:
+    name: Construir y probar la imagen
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir la imagen
+        run: docker build -f ${{ inputs.dockerfile }} -t karswcol:ci .
+      - name: Arrancar el contenedor y esperar /health
+        run: |
+          docker run -d --name karswcol -p 3000:3000 -e SESSION_SECRET=ci karswcol:ci
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:3000/health; then echo; exit 0; fi
+            sleep 1
+          done
+          docker logs karswcol
+          exit 1
+      - name: El cliente se sirve desde el contenedor
+        run: curl -fs http://localhost:3000/ | grep -q "screen-login"

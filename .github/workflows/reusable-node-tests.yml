@@ -1,0 +1,49 @@
+# Workflow reutilizable: instala dependencias, corre las pruebas del
+# servidor y del cliente con cobertura y publica lcov.info como artefacto
+# para el análisis de Sonar.
+name: Pruebas y cobertura (reutilizable)
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Versión de Node
+        type: string
+        default: '22'
+      coverage-artifact:
+        description: Nombre del artefacto con lcov.info
+        type: string
+        default: coverage
+
+jobs:
+  test:
+    name: Pruebas (Node ${{ inputs.node-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: Pruebas con cobertura (servidor + cliente)
+        run: npm run coverage
+      - name: Revisar la sintaxis de los scripts del cliente
+        working-directory: client
+        # race3d.js es un módulo ES: se revisa como .mjs para que Node no lo
+        # trate como CommonJS.
+        run: |
+          for f in js/*.js; do
+            if grep -q "^import " "$f"; then cp "$f" "$RUNNER_TEMP/check.mjs" && node --check "$RUNNER_TEMP/check.mjs"
+            else node --check "$f"; fi
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.coverage-artifact }}
+          path: server/coverage/lcov.info
+          retention-days: 7

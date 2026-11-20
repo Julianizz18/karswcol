@@ -1,0 +1,58 @@
+# Workflow reutilizable: análisis estático con SonarCloud usando la
+# cobertura producida por reusable-node-tests.yml. Espera el Quality Gate:
+# si no queda en verde, el workflow falla.
+#
+# Configuración del repositorio (Settings > Secrets and variables > Actions):
+#   secreto  SONAR_TOKEN          token de SonarCloud (My Account > Security)
+#   variable SONAR_ORGANIZATION   clave de la organización en SonarCloud
+#   variable SONAR_PROJECT_KEY    clave del proyecto en SonarCloud
+# Sin SONAR_TOKEN el análisis se omite (con aviso) en vez de fallar.
+name: SonarCloud (reutilizable)
+
+on:
+  workflow_call:
+    inputs:
+      coverage-artifact:
+        type: string
+        default: coverage
+    secrets:
+      SONAR_TOKEN:
+        required: false
+
+jobs:
+  sonar:
+    name: Análisis SonarCloud
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Revisar configuración
+        id: config
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "::warning::SONAR_TOKEN no está configurado: se omite el análisis de SonarCloud."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.config.outputs.enabled == 'true'
+        with:
+          fetch-depth: 0 # SonarCloud usa el historial para asignar los problemas nuevos
+      - uses: actions/download-artifact@v4
+        if: steps.config.outputs.enabled == 'true'
+        with:
+          name: ${{ inputs.coverage-artifact }}
+          path: server/coverage
+      - name: Análisis y Quality Gate
+        if: steps.config.outputs.enabled == 'true'
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+        with:
+          args: >
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+            -Dsonar.qualitygate.wait=true
