@@ -72,6 +72,8 @@ export class RaceRoom {
     this.userOfPlayer = new Map();
     this.disconnected = new Map(); // id -> timer de gracia
     this.pausesUsed = new Map(); // id -> pausas usadas en esta carrera
+    this.random = Math.random; // inyectable en pruebas
+    this.gridOrder = [];
     this.lobbyVotes = new Set(); // quienes ya pidieron volver al lobby desde resultados
     this.resultsTimer = null;
   }
@@ -379,6 +381,21 @@ export class RaceRoom {
     }, 1000);
   }
 
+  /**
+   * Sortea las casillas de salida de los humanos al arrancar cada carrera.
+   * Antes dependían del orden de llegada al lobby: el primero en entrar
+   * siempre salía adelante. Los bots se ubican detrás de los humanos.
+   */
+  shuffleGrid() {
+    const humans = [...this.playerStates.values()].filter(p => !p.isBot);
+    for (let i = humans.length - 1; i > 0; i--) {
+      const j = Math.floor(this.random() * (i + 1));
+      [humans[i], humans[j]] = [humans[j], humans[i]];
+    }
+    humans.forEach((p, slot) => this.gameEngine.placeOnGrid(p, slot, this.track));
+    this.gridOrder = humans.map(p => p.id);
+  }
+
   spawnBots() {
     const humanCount = this.playerStates.size;
     const needed = Math.max(0, BOT_FILL_TARGET - humanCount);
@@ -416,6 +433,7 @@ export class RaceRoom {
     this.eventManager.reset(wetStart);
     this.puddles = new PuddleField(this.track);
     if (wetStart) this.puddles.update(Infinity, true);
+    this.shuffleGrid();
     if (this.fillWithBots) this.spawnBots();
     metrics.racesStarted.inc({ track: this.trackId });
     logger.info('race.started', {

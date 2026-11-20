@@ -176,3 +176,24 @@ test('en el lobby un rechazo (sala llena) no trae tiempo de espera', () => {
   assert.match(full.rejection, /llena/);
   assert.equal(full.waitMs, undefined);
 });
+
+test('al arrancar se sortea la parrilla de los humanos', () => {
+  join('1', 'johan');
+  join('2', 'sara');
+  join('3', 'julian');
+  const startSlot = id => {
+    const p = room.playerStates.get(id);
+    return room.track.startPositions.findIndex(s => s.x === p.x && s.y === p.y);
+  };
+  // random() = 0 siempre: Fisher-Yates rota el arreglo -> [2, 3, 1]
+  room.random = () => 0;
+  room.startRace();
+  assert.deepEqual(room.gridOrder, ['2', '3', '1']);
+  assert.deepEqual(['2', '3', '1'].map(startSlot), [0, 1, 2]);
+});
+
+test('con random real todas las casillas se usan una sola vez', () => {
+  for (let i = 1; i <= 5; i++) join(String(i), `p${i}`);
+  room.startRace();
+  assert.deepEqual([...room.gridOrder].sort(), ['1', '2', '3', '4', '5']);
+});
