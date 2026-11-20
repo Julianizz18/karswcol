@@ -366,7 +366,7 @@ export class RaceRoom {
       rainActive: this.eventManager.rainActive,
       puddles: this.puddles.anyWater ? this.puddles.serialize() : [],
       players: [...this.playerStates.values()].map(p => ({ ...this.gameEngine.serializePlayer(p, now), isBot: !!p.isBot })),
-      pickups: this.concurrencyResolver.serialize()
+      pickups: this.concurrencyResolver.serialize(now)
     });
 
     // Fin de carrera (HU05): todos llegaron, o expiró el tiempo límite. Sin
