@@ -588,10 +588,31 @@ function cafeteroProps(track, rand) {
   });
 }
 
+// Llanos Orientales: ganado pastando en la sabana.
+function llanosProps(track, rand) {
+  const legs = [[2.6, 1.1], [2.6, -1.1], [-2.6, 1.1], [-2.6, -1.1]];
+  return scatterProps(track, rand, {
+    count: 45,
+    minGap: 30,
+    maxGap: 220,
+    minSize: 0.9,
+    maxSize: 1.15,
+    parts: [
+      { geometry: piece(new THREE.BoxGeometry(8, 3.8, 3.6), 0, 4.6, 0), color: '#f1ede4' },
+      { geometry: piece(new THREE.BoxGeometry(2.6, 3.9, 3.7), -1.2, 4.6, 0), color: '#222222' }, // mancha
+      { geometry: piece(new THREE.BoxGeometry(2.6, 2.4, 2.4), 5, 4.2, 0), color: '#f1ede4' },  // cabeza, pastando
+      { geometry: piece(new THREE.BoxGeometry(0.9, 1.2, 2), 6.4, 3.6, 0), color: '#d9a6a0' },  // hocico
+      { geometry: piece(new THREE.BoxGeometry(0.4, 0.4, 4), 4.6, 5.6, 0), color: '#e8dcc0' },  // cachos
+      ...legs.map(([x, z]) => ({ geometry: piece(new THREE.BoxGeometry(0.9, 2.8, 0.9), x, 1.4, z), color: '#e6e0d4' }))
+    ]
+  });
+}
+
 const REGIONAL_PROPS = {
   caribe: caribeProps,
   andes: andesProps,
-  cafetero: cafeteroProps
+  cafetero: cafeteroProps,
+  llanos: llanosProps
 };
 
 function buildRegionalProps(track, rand) {
