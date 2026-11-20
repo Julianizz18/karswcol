@@ -597,13 +597,71 @@
 
     Net.on('disconnected', evt => {
       connected = false;
+      if (reconnecting) return; // el ciclo de reconexión maneja sus propios intentos
       if (evt && evt.code === 4401) {
-        // Sesión vencida o inexistente: volver al login.
+        // Sesión vencida, cerrada u otra pestaña cerró sesión: volver al login.
         location.reload();
         return;
       }
-      alert('Se perdió la conexión con el servidor.');
+      if (evt && evt.code === 1008) {
+        showConnBanner('El servidor cerró la conexión por exceso de mensajes.', { retry: true });
+        return;
+      }
+      reconnect();
     });
+  }
+
+  // ---------- Reconexión ----------
+  // Si se cae la conexión (wifi, servidor reiniciándose) se reintenta con
+  // espera creciente y, al volver, se vuelve a entrar a la sala: en plena
+  // carrera el servidor conserva el kart 30 s. Antes salía un alert() y el
+  // jugador quedaba colgado hasta recargar.
+  const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000];
+  const RECONNECT_MAX_ATTEMPTS = 14; // ~1.5 min en total
+  let reconnecting = false;
+  const connBanner = document.getElementById('conn-banner');
+
+  function showConnBanner(text, { retry = false } = {}) {
+    connBanner.replaceChildren(document.createTextNode(text));
+    if (retry) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-secondary';
+      btn.textContent = 'Recargar';
+      btn.addEventListener('click', () => location.reload());
+      connBanner.append(btn);
+    }
+    connBanner.hidden = false;
+  }
+
+  function hideConnBanner() {
+    connBanner.hidden = true;
+  }
+
+  async function reconnect() {
+    reconnecting = true;
+    const wasInRoom = !!selfId || !!pendingJoin;
+    for (let attempt = 1; attempt <= RECONNECT_MAX_ATTEMPTS; attempt++) {
+      showConnBanner(`Se perdió la conexión. Reconectando… (intento ${attempt})`);
+      const delay = RECONNECT_DELAYS_MS[Math.min(attempt - 1, RECONNECT_DELAYS_MS.length - 1)];
+      await new Promise(resolve => setTimeout(resolve, delay));
+      try {
+        await Net.connect();
+        connected = true;
+        reconnecting = false;
+        hideConnBanner();
+        showToast('📶 Conexión recuperada');
+        if (wasInRoom && lastJoinRequest) {
+          selfId = null;
+          Net.send('join', lastJoinRequest);
+        }
+        return;
+      } catch {
+        // Sigue intentando.
+      }
+    }
+    reconnecting = false;
+    showConnBanner('No se pudo reconectar con el servidor.', { retry: true });
   }
 
   document.getElementById('btn-enter-lobby').addEventListener('click', async () => {
