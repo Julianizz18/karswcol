@@ -185,16 +185,42 @@ export function createGateway({ clientDir, room, auth }) {
       return;
     }
 
-    fs.readFile(filePath, (err, data) => {
-      if (err) {
+    fs.stat(filePath, (statErr, stat) => {
+      if (statErr || !stat.isFile()) {
         res.writeHead(404);
         res.end('Not found');
         return;
       }
       const ext = path.extname(filePath);
-      res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
-      res.end(data);
+      const lastModified = stat.mtime.toUTCString();
+      const headers = {
+        'Content-Type': MIME[ext] || 'application/octet-stream',
+        'Last-Modified': lastModified,
+        'Cache-Control': cacheControlFor(filePath, ext)
+      };
+      // El navegador ya tiene la versión actual: 304 sin cuerpo.
+      const since = Date.parse(req.headers['if-modified-since'] || '');
+      if (!Number.isNaN(since) && Math.floor(stat.mtimeMs / 1000) * 1000 <= since) {
+        res.writeHead(304, headers);
+        res.end();
+        return;
+      }
+      res.writeHead(200, { ...headers, 'Content-Length': stat.size });
+      if (req.method === 'HEAD') {
+        res.end();
+        return;
+      }
+      fs.createReadStream(filePath).on('error', () => res.destroy()).pipe(res);
     });
+  }
+
+  // Imágenes y librerías de vendor/ casi nunca cambian: caché de un día.
+  // HTML, JS y CSS se revalidan siempre (304 si no cambiaron), así un
+  // despliegue nuevo se ve de inmediato.
+  function cacheControlFor(filePath, ext) {
+    const isVendor = filePath.startsWith(path.join(clientDir, 'vendor') + path.sep);
+    const isImage = ['.png', '.jpg', '.jpeg', '.svg'].includes(ext);
+    return isVendor || isImage ? 'public, max-age=86400' : 'no-cache';
   }
 
   const server = http.createServer((req, res) => {

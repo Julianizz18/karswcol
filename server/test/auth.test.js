@@ -191,3 +191,25 @@ test('cerrar una conexión que nunca entró no la saca de la sala', async () => 
   await new Promise(resolve => setTimeout(resolve, 50));
   assert.equal(room.removed.length, removedBefore);
 });
+
+test('los estáticos llevan Last-Modified y responden 304 si no cambiaron', async () => {
+  const first = await fetch(`${base}/index.html`);
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get('cache-control'), 'no-cache');
+  const lastModified = first.headers.get('last-modified');
+  assert.ok(lastModified);
+  const second = await fetch(`${base}/index.html`, { headers: { 'if-modified-since': lastModified } });
+  assert.equal(second.status, 304);
+});
+
+test('las imágenes se cachean un día', async () => {
+  const res = await fetch(`${base}/img/kart-taxi.png`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('cache-control'), 'public, max-age=86400');
+  assert.equal(res.headers.get('content-type'), 'image/png');
+});
+
+test('una carpeta no se sirve como archivo', async () => {
+  const res = await fetch(`${base}/img`);
+  assert.equal(res.status, 404);
+});
