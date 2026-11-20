@@ -126,7 +126,7 @@ function joinRejectionReason(text) {
 }
 
 // Rutas de la API de autenticación. Devuelve true si atendió la petición.
-async function handleAuthApi(req, res, auth) {
+async function handleAuthApi(req, res, auth, onLogout = () => {}) {
   const url = req.url.split('?')[0];
   if (!url.startsWith('/api/')) return false;
 
@@ -161,6 +161,12 @@ async function handleAuthApi(req, res, auth) {
       sendJson(res, 401, { error: err.message });
     }
   } else if (url === '/api/auth/logout' && req.method === 'POST') {
+    const session = auth.sessionFromRequest(req);
+    if (session) {
+      auth.revokeSession(session);
+      onLogout(session.sid);
+      logger.info('auth.logout');
+    }
     sendJson(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, '', 0) });
   } else {
     sendJson(res, 404, { error: 'Not found' });
@@ -176,6 +182,15 @@ function hasBearerToken(req, expected) {
 
 export function createGateway({ clientDir, room, auth, metricsToken = process.env.METRICS_TOKEN || '' }) {
   const clients = new Map(); // id -> ws
+  const sessionOf = new Map(); // id -> sid de la sesión con que se conectó
+
+  // Al cerrar sesión, las pestañas abiertas con esa sesión se desconectan.
+  function closeSessionSockets(sid) {
+    if (!sid) return;
+    for (const [connId, connSid] of sessionOf) {
+      if (connSid === sid) clients.get(connId)?.close(4401, 'Sesión cerrada');
+    }
+  }
   let nextId = 1;
   const startedAt = Date.now();
 
@@ -208,7 +223,7 @@ export function createGateway({ clientDir, room, auth, metricsToken = process.en
 
   async function handleRequest(req, res) {
     if (await handleOpsEndpoints(req, res)) return;
-    if (await handleAuthApi(req, res, auth)) return;
+    if (await handleAuthApi(req, res, auth, closeSessionSockets)) return;
 
     let filePath = req.url === '/' ? '/index.html' : req.url;
     try {
@@ -322,6 +337,7 @@ export function createGateway({ clientDir, room, auth, metricsToken = process.en
     let joined = false;
     const limiter = createRateLimiter();
     clients.set(id, ws);
+    sessionOf.set(id, session.sid);
     wsConnectionsTotal.inc({ result: 'accepted' });
     wsConnections.set(clients.size);
     logger.debug('ws.connected', { connId: id, connections: clients.size });
@@ -397,6 +413,7 @@ export function createGateway({ clientDir, room, auth, metricsToken = process.en
 
     ws.on('close', () => {
       clients.delete(id);
+      sessionOf.delete(id);
       wsConnections.set(clients.size);
       logger.debug('ws.disconnected', { connId: id, connections: clients.size });
       // Una conexión que nunca entró no está en la sala: sacarla mandaba un

@@ -31,9 +31,28 @@ export function createAuthService({
     return crypto.createHmac('sha256', sessionSecret).update(data).digest('base64url');
   }
 
+  // Sesiones revocadas por logout: sid -> exp. La cookie es un token firmado
+  // sin estado, así que sin esta lista seguía valiendo hasta 12 h después de
+  // cerrar sesión. Se guarda hasta que el token vencería de todos modos.
+  const revoked = new Map();
+
+  function purgeRevoked(now = Date.now()) {
+    for (const [sid, exp] of revoked) if (exp <= now) revoked.delete(sid);
+  }
+
   function createSession(user) {
-    const payload = Buffer.from(JSON.stringify({ ...user, exp: Date.now() + SESSION_TTL_MS })).toString('base64url');
+    // sid se conserva al renovar: revocarlo invalida también las renovaciones.
+    const sid = user.sid || crypto.randomBytes(12).toString('base64url');
+    const payload = Buffer.from(JSON.stringify({ ...user, sid, exp: Date.now() + SESSION_TTL_MS })).toString('base64url');
     return `${payload}.${sign(payload)}`;
+  }
+
+  /** Cierra la sesión del lado del servidor: el token deja de valer. */
+  function revokeSession(session) {
+    if (!session || !session.sid) return;
+    purgeRevoked();
+    // Una renovación extiende el vencimiento: se guarda hasta el máximo posible.
+    revoked.set(session.sid, Date.now() + SESSION_TTL_MS);
   }
 
   function readSession(token) {
@@ -45,6 +64,7 @@ export function createAuthService({
     if (expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) return null;
     try {
       const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+      if (session.sid && revoked.has(session.sid)) return null;
       return session.exp > Date.now() ? session : null;
     } catch {
       return null;
@@ -102,7 +122,8 @@ export function createAuthService({
     loginForLoadTest,
     readSession,
     sessionFromRequest,
-    renewSession
+    renewSession,
+    revokeSession
   };
 }
 

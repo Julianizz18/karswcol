@@ -238,3 +238,37 @@ test('quien insiste muy por encima del límite es desconectado', async () => {
   for (let i = 0; i < 500; i++) ws.send(JSON.stringify({ type: 'input', input: {} }));
   assert.equal(await closed, 1008);
 });
+
+test('después del logout la cookie anterior ya no sirve', async () => {
+  const res = await login('token-valido');
+  const cookie = sessionCookieFrom(res);
+  assert.equal((await fetch(`${base}/api/auth/me`, { headers: { cookie } })).status, 200);
+  await fetch(`${base}/api/auth/logout`, { method: 'POST', headers: { cookie } });
+  assert.equal((await fetch(`${base}/api/auth/me`, { headers: { cookie } })).status, 401);
+});
+
+test('una cookie renovada antes del logout también queda invalidada', async () => {
+  const res = await login('token-valido');
+  const cookie = sessionCookieFrom(res);
+  const me = await fetch(`${base}/api/auth/me`, { headers: { cookie } });
+  const renewed = me.headers.get('set-cookie').split(';')[0];
+  await fetch(`${base}/api/auth/logout`, { method: 'POST', headers: { cookie } });
+  assert.equal((await fetch(`${base}/api/auth/me`, { headers: { cookie: renewed } })).status, 401);
+});
+
+test('el logout desconecta las pestañas abiertas con esa sesión', async () => {
+  const res = await login('token-valido');
+  const cookie = sessionCookieFrom(res);
+  const ws = openSocket(cookie);
+  await new Promise(resolve => ws.on('open', resolve));
+  const closed = new Promise(resolve => ws.on('close', code => resolve(code)));
+  await fetch(`${base}/api/auth/logout`, { method: 'POST', headers: { cookie } });
+  assert.equal(await closed, 4401);
+});
+
+test('el logout de una sesión no afecta a otra', async () => {
+  const a = sessionCookieFrom(await login('token-valido'));
+  const b = sessionCookieFrom(await login('token-valido'));
+  await fetch(`${base}/api/auth/logout`, { method: 'POST', headers: { cookie: a } });
+  assert.equal((await fetch(`${base}/api/auth/me`, { headers: { cookie: b } })).status, 200);
+});
