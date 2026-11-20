@@ -289,6 +289,12 @@
   // Solo el anfitrión configura la sala: a los demás se les deshabilitan los
   // controles (el servidor igual ignora sus cambios) y se les dice quién elige.
   const HOST_CONTROLS = '#track-picker button, #track-prev, #track-next, #difficulty-picker button, #time-picker button, #btn-toggle-bots';
+  let lastHost = { id: null, player: null }; // del último lobby_update
+
+  function applyHostControls() {
+    setHostControls(!lastHost.id || lastHost.id === selfId, lastHost.player);
+  }
+
   function setHostControls(isHost, host) {
     document.querySelectorAll(HOST_CONTROLS).forEach(el => { el.disabled = !isHost; });
     const note = document.getElementById('host-note');
@@ -405,6 +411,9 @@
   function wireServerEvents() {
     Net.on('joined', msg => {
       selfId = msg.id;
+      // El servidor manda el lobby_update antes que "joined": en ese momento
+      // aún no se sabía quién era uno y los controles quedaban bloqueados.
+      applyHostControls();
       Router.show('lobby');
     });
 
@@ -485,7 +494,8 @@
         updateBotsButton();
       }
       // Después de pintar los selectores, para alcanzar también los botones recién creados.
-      setHostControls(!msg.hostId || msg.hostId === selfId, host);
+      lastHost = { id: msg.hostId, player: host };
+      applyHostControls();
     });
 
     Net.on('countdown', msg => {
