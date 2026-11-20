@@ -21,7 +21,8 @@ const FAKE_TOKENS = {
 const room = {
   players: [],
   addPlayer(id, name, color, avatar) { this.players.push({ id, name, avatar }); return null; },
-  removePlayer() {}, setReady() {}, selectTrack() {}, selectDifficulty() {},
+  removed: [], tracks: [],
+  removePlayer(id) { this.removed.push(id); }, setReady() {}, selectTrack(t) { this.tracks.push(t); }, selectDifficulty() {},
   toggleBots() {}, setInput() {}, requestRestart() {}
 };
 
@@ -163,4 +164,30 @@ test('la foto de Google llega a la sala desde la sesión, no desde el cliente', 
   await new Promise(resolve => ws.on('message', resolve));
   assert.equal(room.players.at(-1).avatar, 'https://lh3.googleusercontent.com/a/foto');
   ws.close();
+});
+
+test('una conexión que no entró a la sala no puede controlarla', async () => {
+  const res = await login('token-valido');
+  const ws = openSocket(sessionCookieFrom(res));
+  await new Promise(resolve => ws.on('open', resolve));
+  ws.send(JSON.stringify({ type: 'select_track', trackId: 'antes-del-join' }));
+  ws.send(JSON.stringify({ type: 'join', name: 'Sara', color: '#FCD116' }));
+  await new Promise(resolve => ws.on('message', resolve));
+  ws.send(JSON.stringify({ type: 'select_track', trackId: 'despues-del-join' }));
+  ws.close();
+  await new Promise(resolve => ws.on('close', resolve));
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert.ok(!room.tracks.includes('antes-del-join'));
+  assert.ok(room.tracks.includes('despues-del-join'));
+});
+
+test('cerrar una conexión que nunca entró no la saca de la sala', async () => {
+  const res = await login('token-valido');
+  const ws = openSocket(sessionCookieFrom(res));
+  await new Promise(resolve => ws.on('open', resolve));
+  const removedBefore = room.removed.length;
+  ws.close();
+  await new Promise(resolve => ws.on('close', resolve));
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert.equal(room.removed.length, removedBefore);
 });

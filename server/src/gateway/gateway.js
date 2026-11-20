@@ -250,6 +250,9 @@ export function createGateway({ clientDir, room, auth }) {
     }
 
     const id = String(nextId++);
+    // Solo quien entró a la sala puede controlarla: una pestaña que se quedó
+    // en el menú no debe cambiar la pista ni reiniciar la carrera de otros.
+    let joined = false;
     clients.set(id, ws);
     wsConnectionsTotal.inc({ result: 'accepted' });
     wsConnections.set(clients.size);
@@ -269,6 +272,7 @@ export function createGateway({ clientDir, room, auth }) {
         return;
       }
       wsMessagesReceived.inc({ type: CLIENT_MESSAGE_TYPES.has(msg.type) ? msg.type : 'unknown' });
+      if (msg.type !== 'join' && !joined) return;
 
       switch (msg.type) {
         case 'join': {
@@ -280,6 +284,7 @@ export function createGateway({ clientDir, room, auth }) {
             joinRejections.inc({ reason: joinRejectionReason(rejection) });
             logger.info('room.join_rejected', { connId: id, reason: rejection });
           } else {
+            joined = true;
             logger.info('room.joined', { connId: id });
           }
           sendTo(ws, rejection ? { type: 'join_rejected', reason: rejection } : { type: 'joined', id });
@@ -318,7 +323,9 @@ export function createGateway({ clientDir, room, auth }) {
       clients.delete(id);
       wsConnections.set(clients.size);
       logger.debug('ws.disconnected', { connId: id, connections: clients.size });
-      room.removePlayer(id);
+      // Una conexión que nunca entró no está en la sala: sacarla mandaba un
+      // lobby_update a todos, incluso en plena carrera.
+      if (joined) room.removePlayer(id);
     });
   });
 
