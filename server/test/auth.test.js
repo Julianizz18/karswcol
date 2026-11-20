@@ -288,3 +288,11 @@ test('los inicios de sesión exitosos y fallidos quedan en /metrics (trazabilida
   assert.equal(await metricValue(['provider="google"', 'result="success"']), okBefore + 1);
   assert.equal(await metricValue(['provider="google"', 'result="failure"']), failBefore + 1);
 });
+
+test('las rutas fuera del cliente no se sirven (path traversal)', async () => {
+  for (const p of ['/../server/package.json', '/%2e%2e/server/package.json', '/..%2f..%2fserver%2fpackage.json', '/js/../../server/.env']) {
+    const res = await fetch(`${base}${p}`);
+    assert.ok([400, 404].includes(res.status), `${p} -> ${res.status}`);
+  }
+  assert.equal((await fetch(`${base}/js/app.js`)).status, 200);
+});

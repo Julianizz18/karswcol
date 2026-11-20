@@ -179,6 +179,20 @@ async function handleAuthApi(req, res, auth, onLogout = () => {}) {
   return true;
 }
 
+/**
+ * Índice de los archivos estáticos del cliente: "/js/app.js" -> ruta absoluta.
+ * Se arma una sola vez al arrancar; el cliente no cambia mientras corre.
+ */
+function indexStaticFiles(clientDir) {
+  const index = new Map();
+  for (const entry of fs.readdirSync(clientDir, { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    const absolute = path.join(entry.parentPath ?? entry.path, entry.name);
+    index.set('/' + path.relative(clientDir, absolute).split(path.sep).join('/'), absolute);
+  }
+  return index;
+}
+
 function hasBearerToken(req, expected) {
   const given = Buffer.from(String(req.headers.authorization || ''));
   const wanted = Buffer.from(`Bearer ${expected}`);
@@ -188,6 +202,7 @@ function hasBearerToken(req, expected) {
 export function createGateway({ clientDir, room, auth, metricsToken = process.env.METRICS_TOKEN || '' }) {
   const clients = new Map(); // id -> ws
   const sessionOf = new Map(); // id -> sid de la sesión con que se conectó
+  const staticFiles = indexStaticFiles(clientDir);
 
   // Al cerrar sesión, las pestañas abiertas con esa sesión se desconectan.
   function closeSessionSockets(sid) {
@@ -230,19 +245,22 @@ export function createGateway({ clientDir, room, auth, metricsToken = process.en
     if (await handleOpsEndpoints(req, res)) return;
     if (await handleAuthApi(req, res, auth, closeSessionSockets)) return;
 
-    let filePath = req.url === '/' ? '/index.html' : req.url;
+    let urlPath;
     try {
-      filePath = path.join(clientDir, decodeURIComponent(filePath.split('?')[0]));
+      urlPath = decodeURIComponent(req.url.split('?')[0]);
     } catch {
       // URL mal codificada (p. ej. "/%"): sin este catch tumbaba el proceso.
       res.writeHead(400);
       res.end('Bad request');
       return;
     }
-
-    if (!filePath.startsWith(clientDir + path.sep)) {
-      res.writeHead(403);
-      res.end('Forbidden');
+    // La URL solo se usa para buscar en el índice de archivos del cliente,
+    // nunca para armar una ruta del sistema de archivos: "/../.env" o
+    // cualquier otra ruta fuera de client/ simplemente no está en el índice.
+    const filePath = staticFiles.get(urlPath === '/' ? '/index.html' : urlPath);
+    if (!filePath) {
+      res.writeHead(404);
+      res.end('Not found');
       return;
     }
 
