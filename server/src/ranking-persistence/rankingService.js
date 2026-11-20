@@ -32,7 +32,8 @@ export class RankingService {
         id: p.id,
         name: p.name,
         finishTimeMs: p.finishTime,
-        lap: p.lap ?? 0
+        lap: p.lap ?? 0,
+        bestLapMs: p.bestLapMs ?? null
       }));
   }
 

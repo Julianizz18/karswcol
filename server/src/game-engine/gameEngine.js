@@ -41,6 +41,9 @@ export class GameEngine {
       lap: 0,
       finished: false,
       finishTime: null,
+      lapStartedAt: null, // reloj de carrera al empezar la vuelta actual (null = la salida)
+      lapTimes: [],
+      bestLapMs: null,
       boostUntil: 0,
       trackIdx: start.idx // posición conocida sobre la línea central (ver locateOnTrack)
     };
@@ -60,6 +63,9 @@ export class GameEngine {
     p.nextCheckpoint = 0;
     p.finished = false;
     p.finishTime = null;
+    p.lapStartedAt = null;
+    p.lapTimes = [];
+    p.bestLapMs = null;
     p.speed = 0;
     p.boostUntil = 0;
   }
@@ -193,11 +199,15 @@ export class GameEngine {
     if (!wasLastCheckpoint) return null;
 
     p.lap += 1;
+    const lapTimeMs = now - (p.lapStartedAt ?? raceStartedAt);
+    p.lapTimes.push(lapTimeMs);
+    if (p.bestLapMs === null || lapTimeMs < p.bestLapMs) p.bestLapMs = lapTimeMs;
+    p.lapStartedAt = now;
     if (p.lap >= TOTAL_LAPS) {
       p.finished = true;
       p.finishTime = now - raceStartedAt;
     }
-    return { type: 'lap_completed', playerId: p.id, name: p.name, lap: p.lap, finished: p.finished };
+    return { type: 'lap_completed', playerId: p.id, name: p.name, lap: p.lap, finished: p.finished, lapTimeMs };
   }
 
   applyBoost(p, now) {

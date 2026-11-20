@@ -317,6 +317,16 @@
     document.getElementById('btn-toggle-bots').setAttribute('aria-checked', String(fillWithBots));
   }
 
+  /** 83456 ms -> "1:23.46" */
+  function formatLapTime(ms) {
+    // En centésimas enteras: redondear antes de separar minutos evita "0:60.00".
+    const cs = Math.round(ms / 10);
+    const minutes = Math.floor(cs / 6000);
+    const rest = cs - minutes * 6000;
+    const seconds = String(Math.floor(rest / 100)).padStart(2, '0');
+    return `${minutes}:${seconds}.${String(rest % 100).padStart(2, '0')}`;
+  }
+
   function showToast(text) {
     const el = document.getElementById('toast');
     el.textContent = text;
@@ -496,7 +506,8 @@
       } else if (msg.kind === 'rain_end') {
         showToast('☀️ Paró de llover: la pista se va secando');
       } else if (msg.kind === 'lap_completed' && msg.playerId === selfId) {
-        showToast(msg.lap >= 3 ? '¡Última vuelta completada! 🏁' : `¡Vuelta ${msg.lap}/3 completada!`);
+        const lapTime = msg.lapTimeMs != null ? ` · ${formatLapTime(msg.lapTimeMs)}` : '';
+        showToast(msg.lap >= 3 ? `¡Última vuelta completada!${lapTime} 🏁` : `¡Vuelta ${msg.lap}/3 completada!${lapTime}`);
       }
     });
 
@@ -524,6 +535,12 @@
         time.textContent = r.finishTimeMs != null
           ? `${(r.finishTimeMs / 1000).toFixed(2)} s`
           : `No terminó · ${r.lap || 0} ${r.lap === 1 ? 'vuelta' : 'vueltas'}`;
+        if (r.bestLapMs != null) {
+          const best = document.createElement('span');
+          best.className = 'result-best-lap';
+          best.textContent = `Mejor vuelta ${formatLapTime(r.bestLapMs)}`;
+          name.append(best);
+        }
         li.append(pos, name, time);
         list.appendChild(li);
       });

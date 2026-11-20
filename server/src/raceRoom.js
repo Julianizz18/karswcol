@@ -334,7 +334,7 @@ export class RaceRoom {
       if (lapEvent) {
         if (lapEvent.finished && this.firstFinishAt === null) this.firstFinishAt = now;
         metrics.lapsCompleted.inc({ kind: p.isBot ? 'bot' : 'human' });
-        this.broadcast({ type: 'event', kind: 'lap_completed', playerId: lapEvent.playerId, name: lapEvent.name, lap: lapEvent.lap });
+        this.broadcast({ type: 'event', kind: 'lap_completed', playerId: lapEvent.playerId, name: lapEvent.name, lap: lapEvent.lap, lapTimeMs: lapEvent.lapTimeMs });
         const rainEvent = this.eventManager.onLapCompleted(lapEvent.lap, now);
         if (rainEvent) metrics.gameEvents.inc({ kind: rainEvent.type });
         if (rainEvent) this.broadcast({ type: 'event', kind: rainEvent.type, durationMs: rainEvent.durationMs });
