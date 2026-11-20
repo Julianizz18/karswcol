@@ -856,6 +856,7 @@ function setTrack(track, weather) {
     disposeGroup(m);
   });
   pickupModels.clear();
+  clearPickupBursts();
   puddleMeshes.clear();
   wetness = 0;
   snapshots = [];
@@ -1387,8 +1388,45 @@ function buildPickupModel(kind) {
 
   const group = new THREE.Group();
   group.add(ring, glow, item);
-  group.userData = { item, ring, phase: Math.random() * Math.PI * 2 };
+  group.userData = { item, ring, phase: Math.random() * Math.PI * 2, color: PICKUP_GLOW[kind] || '#FCD116', available: true, appearedAt: 0 };
   return group;
+}
+
+// Destello al recoger un objeto: un brillo de su color que se expande y se
+// desvanece en medio segundo.
+const PICKUP_BURST_MS = 450;
+const PICKUP_APPEAR_MS = 350;
+const pickupBursts = [];
+
+function spawnPickupBurst(position, color, time) {
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  sprite.position.set(position.x, 5, position.z);
+  scene.add(sprite);
+  pickupBursts.push({ sprite, born: time });
+}
+
+function updatePickupBursts(time) {
+  for (let i = pickupBursts.length - 1; i >= 0; i--) {
+    const { sprite, born } = pickupBursts[i];
+    const t = (time - born) / PICKUP_BURST_MS;
+    if (t >= 1) {
+      scene.remove(sprite);
+      sprite.material.dispose();
+      pickupBursts.splice(i, 1);
+      continue;
+    }
+    const size = 8 + t * 30;
+    sprite.scale.set(size, size, 1);
+    sprite.material.opacity = 0.9 * (1 - t);
+  }
+}
+
+function clearPickupBursts() {
+  pickupBursts.forEach(({ sprite }) => {
+    scene.remove(sprite);
+    sprite.material.dispose();
+  });
+  pickupBursts.length = 0;
 }
 
 function updatePickups(pickups, time) {
@@ -1399,16 +1437,26 @@ function updatePickups(pickups, time) {
     if (!model) {
       model = buildPickupModel(pu.kind);
       model.position.set(pu.x, 0, pu.y);
+      model.userData.available = !!pu.available; // sin destello al aparecer ya recogido
       pickupModels.set(pu.id, model);
       scene.add(model);
     }
-    model.visible = !!pu.available;
-    const { item, ring, phase } = model.userData;
-    item.position.y = 2 + Math.sin(time / 300 + phase) * 1;
-    item.rotation.y = time / 700 + phase;
-    ring.material.opacity = 0.5 + Math.sin(time / 220 + phase) * 0.2;
+    const data = model.userData;
+    const available = !!pu.available;
+    if (data.available && !available) spawnPickupBurst(model.position, data.color, time);
+    if (!data.available && available) data.appearedAt = time; // reaparece creciendo
+    data.available = available;
+    model.visible = available;
+
+    const grow = Math.min(1, (time - data.appearedAt) / PICKUP_APPEAR_MS);
+    const scale = 1 - (1 - grow) ** 3; // ease-out
+    model.scale.setScalar(Math.max(scale, 0.001));
+    data.item.position.y = 2 + Math.sin(time / 300 + data.phase) * 1;
+    data.item.rotation.y = time / 700 + data.phase;
+    data.ring.material.opacity = 0.5 + Math.sin(time / 220 + data.phase) * 0.2;
   });
   pickupModels.forEach((model, id) => { if (!seen.has(id)) model.visible = false; });
+  updatePickupBursts(time);
 }
 
 // ---------- Lluvia ----------
