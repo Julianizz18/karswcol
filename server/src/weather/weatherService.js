@@ -72,10 +72,7 @@ export class WeatherService {
       timezone: 'America/Bogota'
     });
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-      const res = await this.fetchImpl(`${API_URL}?${params}`, { signal: controller.signal });
-      clearTimeout(timeout);
+      const res = await this.fetchImpl(`${API_URL}?${params}`, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const list = Array.isArray(data) ? data : [data];
