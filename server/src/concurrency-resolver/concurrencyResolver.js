@@ -50,7 +50,7 @@ export class ConcurrencyResolver {
   }
 
   serialize(now) {
-    return this.pickups.map(pu => ({ id: pu.id, x: pu.x, y: pu.y, available: pu.respawnAt <= now, emoji: pu.emoji, name: pu.name }));
+    return this.pickups.map(pu => ({ id: pu.id, x: pu.x, y: pu.y, available: pu.respawnAt <= now, kind: pu.powerupId, emoji: pu.emoji, name: pu.name }));
   }
 
   clear() {

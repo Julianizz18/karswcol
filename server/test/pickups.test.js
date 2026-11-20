@@ -6,7 +6,7 @@ import { PICKUP_RESPAWN_MS } from '../src/game-engine/gameplayConfig.js';
 // Objetos recogibles: el primero en llegar se lo lleva y reaparece según el
 // reloj de carrera (que no avanza durante la pausa).
 
-const track = { pickupRadius: 20, pickups: [{ id: 'p1', x: 0, y: 0, name: 'Tinto', emoji: '☕' }] };
+const track = { pickupRadius: 20, pickups: [{ id: 'p1', x: 0, y: 0, powerupId: 'tinto', name: 'Tinto', emoji: '☕' }] };
 const engine = { boosts: [], applyBoost(p) { this.boosts.push(p.name); } };
 
 function setup() {
@@ -37,4 +37,9 @@ test('el objeto reaparece tras PICKUP_RESPAWN_MS del reloj de carrera', () => {
   assert.equal(resolver.tryClaim({ name: 'Sara', x: 0, y: 0 }, engine, 1000 + PICKUP_RESPAWN_MS - 1), null);
   assert.equal(resolver.serialize(1000 + PICKUP_RESPAWN_MS)[0].available, true);
   assert.equal(resolver.tryClaim({ name: 'Sara', x: 0, y: 0 }, engine, 1000 + PICKUP_RESPAWN_MS).by, 'Sara');
+});
+
+test('serialize incluye el tipo de objeto para que el cliente elija su modelo 3D', () => {
+  const resolver = setup();
+  assert.equal(resolver.serialize(0)[0].kind, 'tinto');
 });
