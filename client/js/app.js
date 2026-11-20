@@ -323,6 +323,26 @@
     });
   }
 
+  // Calidad gráfica de la vista 3D: preferencia de cada jugador, no de la
+  // sala (no la bloquea el anfitrión). "Auto" ajusta sola para sostener 60 FPS.
+  const QUALITY_OPTIONS = [
+    { id: 'auto', label: 'Auto' },
+    { id: 'alta', label: 'Alta' },
+    { id: 'media', label: 'Media' },
+    { id: 'baja', label: 'Baja' }
+  ];
+  function renderQualityPicker() {
+    const race3d = window.Race3D;
+    if (!race3d || !race3d.supported) return;
+    document.getElementById('quality-setting').hidden = false;
+    renderPillPicker('quality-picker', QUALITY_OPTIONS, race3d.qualityMode, id => {
+      race3d.setQualityMode(id);
+      renderQualityPicker();
+    });
+  }
+  if (window.Race3D) renderQualityPicker();
+  else window.addEventListener('race3d-ready', renderQualityPicker, { once: true });
+
   let fillWithBots = false;
 
   function updateBotsButton() {

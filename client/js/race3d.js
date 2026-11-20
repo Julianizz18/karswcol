@@ -44,7 +44,17 @@ const QUALITY_LEVELS = [
 const QUALITY_MIN_FPS = 50;        // promedio por debajo del cual se baja un nivel
 const QUALITY_WINDOW_MS = 2000;    // ventana de medición
 const QUALITY_WARMUP_MS = 3000;    // al empezar se compilan shaders: no se mide
-let qualityIndex = 0;
+// Modo elegido por el jugador en el lobby: 'auto' (adaptativa) o un nivel
+// fijo ('alta', 'media', 'baja'). Se guarda en el navegador.
+const QUALITY_STORAGE_KEY = 'karswcol.quality';
+let qualityMode = 'auto';
+try {
+  const saved = localStorage.getItem(QUALITY_STORAGE_KEY);
+  if (saved && (saved === 'auto' || QUALITY_LEVELS.some(l => l.name === saved))) qualityMode = saved;
+} catch {
+  // Sin localStorage (modo privado estricto): se queda en automático.
+}
+let qualityIndex = qualityMode === 'auto' ? 0 : QUALITY_LEVELS.findIndex(l => l.name === qualityMode);
 const qualityMeter = { since: 0, frames: 0, warmupUntil: 0 };
 
 function quality() {
@@ -79,7 +89,22 @@ function applyQuality() {
 }
 
 /** Se llama una vez por frame; baja la calidad si el promedio no da. */
+/** Cambia el modo de calidad desde el lobby y lo recuerda. */
+function setQualityMode(mode) {
+  if (mode !== 'auto' && !QUALITY_LEVELS.some(l => l.name === mode)) return;
+  qualityMode = mode;
+  qualityIndex = mode === 'auto' ? 0 : QUALITY_LEVELS.findIndex(l => l.name === mode);
+  try {
+    localStorage.setItem(QUALITY_STORAGE_KEY, mode);
+  } catch {
+    // No se pudo guardar: aplica solo a esta visita.
+  }
+  if (renderer) applyQuality();
+  resetQualityMeter();
+}
+
 function measureQuality(now) {
+  if (qualityMode !== 'auto') return; // nivel fijo elegido por el jugador
   if (now < qualityMeter.warmupUntil || document.hidden) {
     qualityMeter.since = 0;
     return;
@@ -2091,6 +2116,8 @@ window.Race3D = {
   get weather() { return currentWeather; },
   /** Nivel de calidad gráfica actual ("alta", "media", ...), para el HUD. */
   get quality() { return renderer ? quality().name : null; },
+  get qualityMode() { return qualityMode; },
+  setQualityMode,
   /** true mientras se dibuja la vista 3D (y no la 2D). */
   get active() { return !!renderer && isVisible(); }
 };
