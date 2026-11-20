@@ -553,8 +553,27 @@ function caribeProps(track, rand) {
   return group;
 }
 
+// Altiplano de Bogotá: frailejones del páramo (tronco grueso y roseta
+// de hojas plateadas, algunos con flor amarilla).
+function andesProps(track, rand) {
+  const rosette = new THREE.IcosahedronGeometry(2.4, 0);
+  rosette.scale(1, 0.55, 1);
+  return scatterProps(track, rand, {
+    count: 70,
+    minSize: 0.7,
+    maxSize: 1.5,
+    parts: [
+      { geometry: piece(new THREE.CylinderGeometry(0.9, 1.2, 6, 7), 0, 3, 0), color: '#6f5f4a' },
+      { geometry: piece(rosette, 0, 6.6, 0), color: '#a9b88a' },
+      { geometry: piece(new THREE.CylinderGeometry(0.12, 0.12, 2.2, 4), 0.6, 8, 0), color: '#7d8a5a' },
+      { geometry: piece(new THREE.IcosahedronGeometry(0.5, 0), 0.6, 9.2, 0), color: '#f2c84b' }
+    ]
+  });
+}
+
 const REGIONAL_PROPS = {
-  caribe: caribeProps
+  caribe: caribeProps,
+  andes: andesProps
 };
 
 function buildRegionalProps(track, rand) {
