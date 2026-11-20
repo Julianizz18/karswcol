@@ -48,7 +48,9 @@ Write-Host "Panel en vivo de k6: http://localhost:5665   Grafana: http://localho
 
 Push-Location (Join-Path $Root 'load-tests')
 try {
+  # p(99) también en el resumen (--summary-export), no solo en Prometheus.
   & $k6Path run -o experimental-prometheus-rw --tag "testid=$testId" `
+    --summary-trend-stats "avg,min,med,max,p(90),p(95),p(99)" `
     -e BASE_URL=http://localhost:3000 -e "LOAD_TEST_TOKEN=$token" @Extra $Script
   $code = $LASTEXITCODE
 } finally {
