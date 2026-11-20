@@ -4,6 +4,9 @@
   "description": "KARSWCOL - servidor autoritativo de carreras (WebSocket + game loop a tick fijo)",
   "type": "module",
   "main": "src/index.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node --env-file-if-exists=.env src/index.js",
     "dev": "node --env-file-if-exists=.env --watch src/index.js",
