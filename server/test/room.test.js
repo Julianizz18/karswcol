@@ -108,3 +108,30 @@ test('al volver al lobby no quedan karts fantasma de desconectados', () => {
   assert.deepEqual(room.matchmaking.list().map(p => p.id), ['2']);
   assert.equal(room.disconnected.size, 0);
 });
+
+test('solo el anfitrión (el primero en entrar) cambia la configuración', () => {
+  join('1', 'johan');
+  join('2', 'sara');
+  assert.equal(room.hostId, '1');
+  const original = room.trackId;
+  const other = room.track.id === 'andes' ? 'caribe' : 'andes';
+  room.selectTrack(other, '2');
+  room.selectDifficulty('dificil', '2');
+  room.toggleBots(true, '2');
+  room.selectTimeOfDay('noche', '2');
+  assert.equal(room.trackId, original);
+  assert.equal(room.fillWithBots, false);
+  assert.equal(room.timeOfDay, 'dia');
+  room.selectTrack(other, '1');
+  room.toggleBots(true, '1');
+  assert.equal(room.trackId, other);
+  assert.equal(room.fillWithBots, true);
+});
+
+test('si el anfitrión se va, el siguiente pasa a ser anfitrión', () => {
+  join('1', 'johan');
+  join('2', 'sara');
+  room.handleDisconnect('1');
+  assert.equal(room.hostId, '2');
+  assert.equal(messages.filter(m => m.type === 'lobby_update').at(-1).hostId, '2');
+});

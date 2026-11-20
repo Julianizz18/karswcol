@@ -283,6 +283,16 @@
    * Control segmentado (dificultad, hora del día): cualquier jugador elige y
    * aplica a la sala. El indicador se desliza por CSS según --index/--count.
    */
+  // Solo el anfitrión configura la sala: a los demás se les deshabilitan los
+  // controles (el servidor igual ignora sus cambios) y se les dice quién elige.
+  const HOST_CONTROLS = '#track-picker button, #track-prev, #track-next, #difficulty-picker button, #time-picker button, #btn-toggle-bots';
+  function setHostControls(isHost, host) {
+    document.querySelectorAll(HOST_CONTROLS).forEach(el => { el.disabled = !isHost; });
+    const note = document.getElementById('host-note');
+    note.hidden = isHost;
+    note.textContent = isHost ? '' : `${host ? host.name : 'El anfitrión'} elige la pista, la hora, la dificultad y los bots.`;
+  }
+
   function renderPillPicker(containerId, options, selected, onPick) {
     const container = document.getElementById(containerId);
     const buttons = [...container.querySelectorAll('button')];
@@ -414,6 +424,13 @@
           you.textContent = 'Tú';
           nameCell.append(you);
         }
+        if (p.id === msg.hostId) {
+          const host = document.createElement('span');
+          host.className = 'host-tag';
+          host.textContent = 'Anfitrión';
+          host.title = 'Elige pista, hora, dificultad y bots';
+          nameCell.append(host);
+        }
         const status = document.createElement('span');
         status.className = p.ready ? 'player-status ready-tag' : 'player-status';
         status.textContent = p.ready ? 'Listo' : 'Esperando';
@@ -422,6 +439,7 @@
       });
       const readyCount = msg.players.filter(p => p.ready).length;
       document.getElementById('lobby-count').textContent = `${readyCount} de ${msg.players.length} listos`;
+      const host = msg.players.find(p => p.id === msg.hostId);
 
       if (msg.tracks) renderTrackPicker(msg.tracks, msg.selectedTrackId);
       if (msg.difficulties) {
@@ -434,6 +452,8 @@
         fillWithBots = msg.fillWithBots;
         updateBotsButton();
       }
+      // Después de pintar los selectores, para alcanzar también los botones recién creados.
+      setHostControls(!msg.hostId || msg.hostId === selfId, host);
     });
 
     Net.on('countdown', msg => {

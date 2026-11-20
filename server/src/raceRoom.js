@@ -78,8 +78,22 @@ export class RaceRoom {
     return { ...real, isDay, timeOfDay: this.timeOfDay };
   }
 
-  selectTimeOfDay(id) {
-    if (this.state !== 'lobby') return;
+  /** Anfitrión: el jugador que lleva más tiempo en la sala. */
+  get hostId() {
+    const first = this.matchmaking.list()[0];
+    return first ? first.id : null;
+  }
+
+  /**
+   * Solo el anfitrión cambia la configuración de la sala. `by` es quien lo
+   * pide; si no se indica (llamadas internas), se permite.
+   */
+  canConfigure(by) {
+    return by === undefined || by === this.hostId;
+  }
+
+  selectTimeOfDay(id, by) {
+    if (this.state !== 'lobby' || !this.canConfigure(by)) return;
     if (!TIMES_OF_DAY.some(t => t.id === id)) return;
     this.timeOfDay = id;
     this.sendLobbyUpdate();
@@ -270,8 +284,8 @@ export class RaceRoom {
     if (p && !p.isBot) this.gameEngine.setInput(p, input);
   }
 
-  selectTrack(trackId) {
-    if (this.state !== 'lobby') return;
+  selectTrack(trackId, by) {
+    if (this.state !== 'lobby' || !this.canConfigure(by)) return;
     if (!TRACKS.some(t => t.id === trackId)) return;
     this.trackId = trackId;
     let slot = 0;
@@ -282,15 +296,15 @@ export class RaceRoom {
     this.sendLobbyUpdate();
   }
 
-  selectDifficulty(difficultyId) {
-    if (this.state !== 'lobby') return;
+  selectDifficulty(difficultyId, by) {
+    if (this.state !== 'lobby' || !this.canConfigure(by)) return;
     if (!DIFFICULTIES[difficultyId]) return;
     this.difficulty = difficultyId;
     this.sendLobbyUpdate();
   }
 
-  toggleBots(enabled) {
-    if (this.state !== 'lobby') return;
+  toggleBots(enabled, by) {
+    if (this.state !== 'lobby' || !this.canConfigure(by)) return;
     this.fillWithBots = !!enabled;
     this.sendLobbyUpdate();
   }
@@ -317,6 +331,7 @@ export class RaceRoom {
         outline: t.outline,
         weather: this.weatherFor(t.id)
       })),
+      hostId: this.hostId,
       selectedTrackId: this.trackId,
       difficulties: Object.entries(DIFFICULTIES).map(([id, d]) => ({ id, label: d.label })),
       selectedDifficulty: this.difficulty,

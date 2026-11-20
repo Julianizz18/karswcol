@@ -393,16 +393,16 @@ export function createGateway({ clientDir, room, auth, metricsToken = process.en
           room.setReady(playerId);
           break;
         case 'select_track':
-          room.selectTrack(String(msg.trackId || ''));
+          room.selectTrack(String(msg.trackId || ''), playerId);
           break;
         case 'select_time':
-          room.selectTimeOfDay(String(msg.timeOfDay || ''));
+          room.selectTimeOfDay(String(msg.timeOfDay || ''), playerId);
           break;
         case 'select_difficulty':
-          room.selectDifficulty(String(msg.difficulty || ''));
+          room.selectDifficulty(String(msg.difficulty || ''), playerId);
           break;
         case 'toggle_bots':
-          room.toggleBots(!!msg.enabled);
+          room.toggleBots(!!msg.enabled, playerId);
           break;
         case 'input':
           room.setInput(playerId, msg.input);
