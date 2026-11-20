@@ -31,11 +31,83 @@ const SCENERY = {
   amazonia: { kind: 'round', count: 420, canopy: '#1d5a26', trunk: '#3d2b1c' }
 };
 
+// ---------- Calidad adaptativa ----------
+// Si el equipo no alcanza 60 FPS, se baja la calidad un nivel a la vez
+// (resolución y sombras) hasta que el juego vaya fluido. Solo baja: un nivel
+// que no aguantó no se vuelve a intentar durante la sesión.
+const QUALITY_LEVELS = [
+  { name: 'alta', pixelRatio: 1.5, shadows: true, shadowMap: 2048 },
+  { name: 'media', pixelRatio: 1.25, shadows: true, shadowMap: 1024 },
+  { name: 'baja', pixelRatio: 1, shadows: false, shadowMap: 1024 },
+  { name: 'mínima', pixelRatio: 0.75, shadows: false, shadowMap: 1024 }
+];
+const QUALITY_MIN_FPS = 50;        // promedio por debajo del cual se baja un nivel
+const QUALITY_WINDOW_MS = 2000;    // ventana de medición
+const QUALITY_WARMUP_MS = 3000;    // al empezar se compilan shaders: no se mide
+let qualityIndex = 0;
+const qualityMeter = { since: 0, frames: 0, warmupUntil: 0 };
+
+function quality() {
+  return QUALITY_LEVELS[qualityIndex];
+}
+
+function pixelRatio() {
+  return Math.min(window.devicePixelRatio || 1, quality().pixelRatio);
+}
+
+function resetQualityMeter(now = performance.now()) {
+  qualityMeter.since = 0;
+  qualityMeter.frames = 0;
+  qualityMeter.warmupUntil = now + QUALITY_WARMUP_MS;
+}
+
+function applyQuality() {
+  renderer.setPixelRatio(pixelRatio());
+  renderer.setSize(viewSize.w || canvas.width, viewSize.h || canvas.height, false);
+  const sun = sceneLights.sun;
+  if (sun) {
+    const size = quality().shadowMap;
+    if (sun.shadow.mapSize.x !== size) {
+      sun.shadow.mapSize.set(size, size);
+      if (sun.shadow.map) {
+        sun.shadow.map.dispose();
+        sun.shadow.map = null; // three.js la vuelve a crear con el tamaño nuevo
+      }
+    }
+    sun.castShadow = !!sun.userData.wantsShadow && quality().shadows;
+  }
+}
+
+/** Se llama una vez por frame; baja la calidad si el promedio no da. */
+function measureQuality(now) {
+  if (now < qualityMeter.warmupUntil || document.hidden) {
+    qualityMeter.since = 0;
+    return;
+  }
+  if (!qualityMeter.since) {
+    qualityMeter.since = now;
+    qualityMeter.frames = 0;
+    return;
+  }
+  qualityMeter.frames++;
+  const elapsed = now - qualityMeter.since;
+  if (elapsed < QUALITY_WINDOW_MS) return;
+  const fps = (qualityMeter.frames * 1000) / elapsed;
+  qualityMeter.since = now;
+  qualityMeter.frames = 0;
+  if (fps < QUALITY_MIN_FPS && qualityIndex < QUALITY_LEVELS.length - 1) {
+    qualityIndex++;
+    applyQuality();
+    resetQualityMeter(now);
+    console.info(`[KARSWCOL] ${Math.round(fps)} FPS: calidad gráfica bajada a "${quality().name}".`);
+  }
+}
+
 const canvas = document.getElementById('race-canvas-3d');
 let renderer = null;
 try {
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.setPixelRatio(pixelRatio());
   renderer.setSize(canvas.width, canvas.height, false);
   // Sombras del sol (solo se proyectan con cielo despejado o parcial, ver Clima).
   renderer.shadowMap.enabled = true;
@@ -81,7 +153,7 @@ function syncSize() {
   const h = canvas.clientHeight;
   if (!w || !h || (w === viewSize.w && h === viewSize.h)) return;
   viewSize = { w, h };
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.setPixelRatio(pixelRatio());
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   const minHorizontal = 2 * Math.atan(Math.tan((BASE_FOV * Math.PI) / 360) * 1.55);
@@ -951,8 +1023,9 @@ function buildTrack(track) {
 
   const hemi = new THREE.HemisphereLight(shade(look.sky[1], 0.5), new THREE.Color(pal.grass), look.hemi);
   const sun = new THREE.DirectionalLight(look.sunColor, look.sun);
-  sun.castShadow = look.shadows;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.userData.wantsShadow = look.shadows; // el clima decide; la calidad puede apagarla
+  sun.castShadow = look.shadows && quality().shadows;
+  sun.shadow.mapSize.set(quality().shadowMap, quality().shadowMap);
   Object.assign(sun.shadow.camera, { left: -170, right: 170, top: 170, bottom: -170, near: 50, far: 900 });
   sun.shadow.bias = -0.0006;
   sun.shadow.normalBias = 0.6;
@@ -1045,6 +1118,7 @@ function setTrack(track, weather) {
 
   currentTrack = track;
   trackGroup = buildTrack(track);
+  resetQualityMeter();
   buildMinimap(track);
   scene.add(trackGroup);
 }
@@ -1985,6 +2059,7 @@ function frame(now) {
   updateAtmosphere(me, dt, now);
   updateWetTrack(state, dt);
   renderer.render(scene, camera);
+  measureQuality(now);
   // El servidor manda posiciones a 20 Hz: redibujar el minimapa a 60 Hz no
   // aporta nada y cuesta un drawImage completo del canvas por frame.
   if (now - lastMinimapAt >= MINIMAP_INTERVAL_MS) {
