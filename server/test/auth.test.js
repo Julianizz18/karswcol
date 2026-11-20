@@ -21,6 +21,8 @@ const FAKE_TOKENS = {
 const room = {
   players: [],
   addPlayer(id, name, color, avatar) { this.players.push({ id, name, avatar }); return null; },
+  join(id, { name, avatar }) { this.players.push({ id, name, avatar }); return { playerId: id, rejoined: false }; },
+  handleDisconnect(id) { this.removePlayer(id); },
   removed: [], tracks: [],
   removePlayer(id) { this.removed.push(id); }, setReady() {}, selectTrack(t) { this.tracks.push(t); }, selectDifficulty() {},
   toggleBots() {}, setInput() {}, requestRestart() {}

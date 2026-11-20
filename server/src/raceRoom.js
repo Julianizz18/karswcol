@@ -22,6 +22,10 @@ export const TIMES_OF_DAY = [
 ];
 const DEFAULT_TIME_OF_DAY = 'dia';
 
+// Si un jugador se desconecta en plena carrera (recargó la página, se le
+// cayó el internet), su kart se conserva este tiempo para que pueda volver.
+export const RECONNECT_GRACE_MS = 30000;
+
 // RaceRoom orquesta los componentes de la vista de aplicación (sección 4.1):
 // no implementa reglas de juego por sí misma, solo conecta Matchmaking,
 // Game Engine, Concurrency Resolver, Event Manager, Ranking Service y el
@@ -55,6 +59,10 @@ export class RaceRoom {
     this.weather = null; // WeatherService opcional (clima real por pista)
     this.timeOfDay = DEFAULT_TIME_OF_DAY;
     this.puddles = null;
+    // Cuenta de Google -> jugador: una cuenta = un kart, y permite volver tras recargar.
+    this.playerByUser = new Map();
+    this.userOfPlayer = new Map();
+    this.disconnected = new Map(); // id -> timer de gracia
   }
 
   /** Clima de la pista con la hora del día elegida en el lobby (día, noche o la real). */
@@ -87,6 +95,71 @@ export class RaceRoom {
     return getTrackById(this.trackId);
   }
 
+  /**
+   * Entrada desde el gateway. Devuelve { playerId, rejoined } o { rejection }.
+   * Con userKey (la cuenta de Google): una misma cuenta no puede tener dos
+   * karts, y si su kart quedó desconectado en plena carrera lo recupera.
+   */
+  join(connId, { name, color, avatar = '', userKey = null }) {
+    const existing = userKey ? this.playerByUser.get(userKey) : null;
+    if (existing) {
+      if (this.disconnected.has(existing)) {
+        clearTimeout(this.disconnected.get(existing));
+        this.disconnected.delete(existing);
+        logger.info('room.rejoined', { state: this.state });
+        return { playerId: existing, rejoined: true };
+      }
+      return { rejection: 'Ya estás en la sala desde otra pestaña o dispositivo.' };
+    }
+    const rejection = this.addPlayer(connId, name, color, avatar);
+    if (rejection) return { rejection };
+    if (userKey) {
+      this.playerByUser.set(userKey, connId);
+      this.userOfPlayer.set(connId, userKey);
+    }
+    return { playerId: connId, rejoined: false };
+  }
+
+  /**
+   * La conexión de un jugador se cerró. En plena carrera (o cuenta
+   * regresiva) su kart se conserva RECONNECT_GRACE_MS por si vuelve; en el
+   * lobby o en resultados sale de inmediato.
+   */
+  handleDisconnect(id) {
+    const p = this.playerStates.get(id);
+    const inRace = this.state === 'countdown' || this.state === 'racing';
+    if (!p || !inRace || !this.userOfPlayer.has(id)) {
+      this.removePlayer(id);
+      return;
+    }
+    if (this.paused && this.pausedBy === id) this.resume(null);
+    this.gameEngine.setInput(p, { up: false, down: false, left: false, right: false });
+    const timer = setTimeout(() => {
+      this.disconnected.delete(id);
+      this.removePlayer(id);
+    }, RECONNECT_GRACE_MS);
+    if (timer.unref) timer.unref();
+    this.disconnected.set(id, timer);
+    this.broadcast({ type: 'event', kind: 'player_disconnected', name: p.name, graceMs: RECONNECT_GRACE_MS });
+  }
+
+  /** Mensajes para poner al día a quien vuelve a mitad de carrera. */
+  resyncMessages() {
+    if (this.state !== 'racing' && this.state !== 'countdown') return [];
+    const messages = [];
+    if (this.state === 'racing') {
+      const weather = this.weatherFor(this.trackId);
+      messages.push({ type: 'race_start', totalLaps: TOTAL_LAPS, track: this.track, weather, wetStart: false, difficulty: this.difficulty, rejoined: true });
+      if (this.paused) {
+        const by = this.playerStates.get(this.pausedBy);
+        messages.push({ type: 'pause', paused: true, by: by ? by.name : null, byId: this.pausedBy });
+      }
+    } else {
+      messages.push({ type: 'countdown', seconds: this.countdownValue });
+    }
+    return messages;
+  }
+
   /** Devuelve null si el jugador entró, o el motivo del rechazo. */
   addPlayer(id, name, color, avatar = '') {
     // Solo se entra desde el lobby: un jugador que llega a mitad de carrera
@@ -109,6 +182,15 @@ export class RaceRoom {
     if (this.paused && this.pausedBy === id) this.resume(null);
     this.matchmaking.leave(id);
     this.playerStates.delete(id);
+    if (this.disconnected.has(id)) {
+      clearTimeout(this.disconnected.get(id));
+      this.disconnected.delete(id);
+    }
+    const userKey = this.userOfPlayer.get(id);
+    if (userKey) {
+      this.playerByUser.delete(userKey);
+      this.userOfPlayer.delete(id);
+    }
     this.updatePlayerMetrics();
     if (this.matchmaking.isEmpty()) {
       this.resetToLobby();
@@ -411,6 +493,16 @@ export class RaceRoom {
     this.concurrencyResolver.clear();
     this.eventManager.reset();
     this.removeBots();
+    // Quien seguía desconectado al terminar la carrera no vuelve al lobby como fantasma.
+    for (const [id, timer] of this.disconnected) {
+      clearTimeout(timer);
+      this.matchmaking.leave(id);
+      this.playerStates.delete(id);
+      this.playerByUser.delete(this.userOfPlayer.get(id));
+      this.userOfPlayer.delete(id);
+    }
+    this.disconnected.clear();
+    this.updatePlayerMetrics();
     this.setState('lobby');
     this.countdownValue = 0;
     this.raceStartedAt = null;

@@ -122,7 +122,7 @@ function createRateLimiter(now = Date.now()) {
 }
 
 function joinRejectionReason(text) {
-  return /llena/i.test(text) ? 'room_full' : /curso/i.test(text) ? 'race_in_progress' : 'other';
+  return /llena/i.test(text) ? 'room_full' : /curso/i.test(text) ? 'race_in_progress' : /pestaña/i.test(text) ? 'already_joined' : 'other';
 }
 
 // Rutas de la API de autenticación. Devuelve true si atendió la petición.
@@ -335,6 +335,8 @@ export function createGateway({ clientDir, room, auth, metricsToken = process.en
     // Solo quien entró a la sala puede controlarla: una pestaña que se quedó
     // en el menú no debe cambiar la pista ni reiniciar la carrera de otros.
     let joined = false;
+    // Id del kart en la sala: el de esta conexión, o el que recuperó al volver.
+    let playerId = id;
     const limiter = createRateLimiter();
     clients.set(id, ws);
     sessionOf.set(id, session.sid);
@@ -371,19 +373,24 @@ export function createGateway({ clientDir, room, auth, metricsToken = process.en
           const name = String(msg.name || session.name || `Piloto ${id}`).slice(0, 20);
           const color = /^#[0-9a-fA-F]{6}$/.test(msg.color) ? msg.color : '#FCD116';
           // La foto sale de la sesión de Google, nunca del mensaje del cliente.
-          const rejection = room.addPlayer(id, name, color, session.picture);
-          if (rejection) {
-            joinRejections.inc({ reason: joinRejectionReason(rejection) });
-            logger.info('room.join_rejected', { connId: id, reason: rejection });
-          } else {
-            joined = true;
-            logger.info('room.joined', { connId: id });
+          if (joined) break;
+          const result = room.join(id, { name, color, avatar: session.picture, userKey: session.sub });
+          if (result.rejection) {
+            joinRejections.inc({ reason: joinRejectionReason(result.rejection) });
+            logger.info('room.join_rejected', { connId: id, reason: result.rejection });
+            sendTo(ws, { type: 'join_rejected', reason: result.rejection });
+            break;
           }
-          sendTo(ws, rejection ? { type: 'join_rejected', reason: rejection } : { type: 'joined', id });
+          joined = true;
+          playerId = result.playerId;
+          logger.info('room.joined', { connId: id, rejoined: result.rejoined });
+          sendTo(ws, { type: 'joined', id: playerId, rejoined: result.rejoined });
+          // Quien vuelve a mitad de carrera recibe la pista y el estado de pausa.
+          if (result.rejoined) for (const m of room.resyncMessages()) sendTo(ws, m);
           break;
         }
         case 'ready':
-          room.setReady(id);
+          room.setReady(playerId);
           break;
         case 'select_track':
           room.selectTrack(String(msg.trackId || ''));
@@ -398,10 +405,10 @@ export function createGateway({ clientDir, room, auth, metricsToken = process.en
           room.toggleBots(!!msg.enabled);
           break;
         case 'input':
-          room.setInput(id, msg.input);
+          room.setInput(playerId, msg.input);
           break;
         case 'toggle_pause':
-          room.togglePause(id);
+          room.togglePause(playerId);
           break;
         case 'restart':
           room.requestRestart();
@@ -418,7 +425,7 @@ export function createGateway({ clientDir, room, auth, metricsToken = process.en
       logger.debug('ws.disconnected', { connId: id, connections: clients.size });
       // Una conexión que nunca entró no está en la sala: sacarla mandaba un
       // lobby_update a todos, incluso en plena carrera.
-      if (joined) room.removePlayer(id);
+      if (joined) room.handleDisconnect(playerId);
     });
   });
 

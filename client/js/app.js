@@ -505,6 +505,8 @@
         showToast('🌧️ ¡Aguacero! Se forman charcos: esquívalos o frena antes');
       } else if (msg.kind === 'rain_end') {
         showToast('☀️ Paró de llover: la pista se va secando');
+      } else if (msg.kind === 'player_disconnected') {
+        showToast(`📡 ${msg.name} se desconectó: tiene ${Math.round(msg.graceMs / 1000)} s para volver`);
       } else if (msg.kind === 'lap_completed' && msg.playerId === selfId) {
         const lapTime = msg.lapTimeMs != null ? ` · ${formatLapTime(msg.lapTimeMs)}` : '';
         showToast(msg.lap >= 3 ? `¡Última vuelta completada!${lapTime} 🏁` : `¡Vuelta ${msg.lap}/3 completada!${lapTime}`);
