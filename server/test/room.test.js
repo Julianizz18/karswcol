@@ -1,6 +1,6 @@
 import { test, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { RaceRoom, RECONNECT_GRACE_MS } from '../src/raceRoom.js';
+import { RaceRoom, RECONNECT_GRACE_MS, RESULTS_RETURN_MS } from '../src/raceRoom.js';
 
 // Ciclo de vida de la sala en el lobby: entrar, salir y arrancar.
 
@@ -134,4 +134,28 @@ test('si el anfitrión se va, el siguiente pasa a ser anfitrión', () => {
   room.handleDisconnect('1');
   assert.equal(room.hostId, '2');
   assert.equal(messages.filter(m => m.type === 'lobby_update').at(-1).hostId, '2');
+});
+
+test('volver al lobby espera a que voten todos los humanos', () => {
+  join('1', 'johan');
+  join('2', 'sara');
+  room.startRace();
+  room.finishRace('time_limit');
+  room.requestRestart('1');
+  assert.equal(room.state, 'results', 'uno solo no arrastra a los demás');
+  assert.deepEqual(messages.filter(m => m.kind === 'lobby_votes').at(-1), { type: 'event', kind: 'lobby_votes', votes: 1, total: 2 });
+  room.requestRestart('2');
+  assert.equal(room.state, 'lobby');
+  assert.ok(messages.some(m => m.type === 'room_reset'));
+});
+
+test('si no votan todos, la sala vuelve sola al lobby tras RESULTS_RETURN_MS', () => {
+  join('1', 'johan');
+  join('2', 'sara');
+  room.startRace();
+  room.finishRace('time_limit');
+  assert.equal(messages.filter(m => m.type === 'results').at(-1).returnInMs, RESULTS_RETURN_MS);
+  room.requestRestart('1');
+  mock.timers.tick(RESULTS_RETURN_MS);
+  assert.equal(room.state, 'lobby');
 });

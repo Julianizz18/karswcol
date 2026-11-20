@@ -411,7 +411,7 @@ export function createGateway({ clientDir, room, auth, metricsToken = process.en
           room.togglePause(playerId);
           break;
         case 'restart':
-          room.requestRestart();
+          room.requestRestart(playerId);
           break;
         default:
           break;

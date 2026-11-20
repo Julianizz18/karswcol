@@ -30,6 +30,10 @@ export const RECONNECT_GRACE_MS = 30000;
 // otra vez y arruinar la carrera a los demás. Reanudar no cuenta.
 export const MAX_PAUSES_PER_PLAYER = 3;
 
+// Tras los resultados la sala vuelve sola al lobby pasado este tiempo, aunque
+// no todos hayan pulsado "Volver al lobby".
+export const RESULTS_RETURN_MS = 20000;
+
 // RaceRoom orquesta los componentes de la vista de aplicación (sección 4.1):
 // no implementa reglas de juego por sí misma, solo conecta Matchmaking,
 // Game Engine, Concurrency Resolver, Event Manager, Ranking Service y el
@@ -68,6 +72,8 @@ export class RaceRoom {
     this.userOfPlayer = new Map();
     this.disconnected = new Map(); // id -> timer de gracia
     this.pausesUsed = new Map(); // id -> pausas usadas en esta carrera
+    this.lobbyVotes = new Set(); // quienes ya pidieron volver al lobby desde resultados
+    this.resultsTimer = null;
   }
 
   /** Clima de la pista con la hora del día elegida en el lobby (día, noche o la real). */
@@ -503,16 +509,40 @@ export class RaceRoom {
     logger.info('race.finished', { track: this.trackId, reason, durationSeconds: Math.round(durationSeconds) });
     const ranking = this.rankingService.buildRanking([...this.playerStates.values()]);
     this.rankingService.persistRace(ranking);
-    this.broadcast({ type: 'results', ranking });
+    this.lobbyVotes.clear();
+    this.resultsTimer = setTimeout(() => this.resetToLobby(), RESULTS_RETURN_MS);
+    if (this.resultsTimer.unref) this.resultsTimer.unref();
+    this.broadcast({ type: 'results', ranking, returnInMs: RESULTS_RETURN_MS });
   }
 
-  /** Volver al lobby a pedido de un jugador: solo desde la pantalla de resultados. */
-  requestRestart() {
+  /**
+   * Volver al lobby desde resultados. Antes el primero que pulsaba el botón
+   * mandaba a toda la sala al lobby mientras los demás leían sus resultados.
+   * Ahora cada humano vota: cuando votan todos (o pasan RESULTS_RETURN_MS)
+   * se vuelve. Sin `by` (llamada interna) se vuelve de inmediato.
+   */
+  requestRestart(by) {
     if (this.state !== 'results') return;
-    this.resetToLobby();
+    if (by === undefined) {
+      this.resetToLobby();
+      return;
+    }
+    const p = this.playerStates.get(by);
+    if (!p || p.isBot) return;
+    this.lobbyVotes.add(by);
+    const humans = [...this.playerStates.values()].filter(h => !h.isBot && !this.disconnected.has(h.id));
+    const votes = humans.filter(h => this.lobbyVotes.has(h.id)).length;
+    if (votes >= humans.length) {
+      this.resetToLobby();
+      return;
+    }
+    this.broadcast({ type: 'event', kind: 'lobby_votes', votes, total: humans.length });
   }
 
   resetToLobby() {
+    if (this.resultsTimer) clearTimeout(this.resultsTimer);
+    this.resultsTimer = null;
+    this.lobbyVotes.clear();
     if (this.tickHandle) clearInterval(this.tickHandle);
     this.tickHandle = null;
     // Si se vuelve al lobby durante la cuenta regresiva, la carrera no debe arrancar igual.
@@ -538,6 +568,8 @@ export class RaceRoom {
     this.countdownValue = 0;
     this.raceStartedAt = null;
     this.matchmaking.resetReadiness();
+    // Los clientes que siguen en resultados (o en la carrera) pasan al lobby.
+    this.broadcast({ type: 'room_reset' });
     let slot = 0;
     for (const p of this.playerStates.values()) {
       this.gameEngine.resetPlayerState(p);

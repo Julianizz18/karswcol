@@ -530,6 +530,8 @@
       } else if (msg.kind === 'pause_count' && msg.byId === selfId) {
         document.getElementById('pause-by').textContent =
           `Pausaste la carrera · te ${msg.remaining === 1 ? 'queda 1 pausa' : `quedan ${msg.remaining} pausas`}`;
+      } else if (msg.kind === 'lobby_votes') {
+        if (backLobbyBtn.disabled) backLobbyBtn.textContent = `Esperando a los demás (${msg.votes}/${msg.total})…`;
       } else if (msg.kind === 'player_disconnected') {
         showToast(`📡 ${msg.name} se desconectó: tiene ${Math.round(msg.graceMs / 1000)} s para volver`);
       } else if (msg.kind === 'lap_completed' && msg.playerId === selfId) {
@@ -576,8 +578,11 @@
         !mine || mine.finishTimeMs == null ? 'Resultados'
           : mine.position === 1 ? 'Ganaste'
             : `Llegaste ${mine.position}.º`;
+      if (msg.returnInMs) startResultsCountdown(msg.returnInMs);
       Router.show('results');
     });
+
+    Net.on('room_reset', onRoomReset);
 
     Net.on('disconnected', evt => {
       connected = false;
@@ -618,13 +623,41 @@
     readyBtn.textContent = 'Esperando al resto…';
   });
 
-  document.getElementById('btn-back-lobby').addEventListener('click', () => {
+  // Volver al lobby es un voto: la sala vuelve cuando votan todos o pasa el
+  // tiempo. El cambio de pantalla lo dispara el servidor con "room_reset".
+  const backLobbyBtn = document.getElementById('btn-back-lobby');
+  const BACK_LOBBY_HTML = backLobbyBtn.innerHTML;
+  backLobbyBtn.addEventListener('click', () => {
     Net.send('restart');
+    backLobbyBtn.disabled = true;
+    backLobbyBtn.textContent = 'Esperando a los demás…';
+  });
+
+  let resultsCountdown = null;
+  function startResultsCountdown(ms) {
+    clearInterval(resultsCountdown);
+    const note = document.getElementById('results-return');
+    const endsAt = Date.now() + ms;
+    const paint = () => {
+      const left = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+      note.textContent = `Volviendo al lobby en ${left} s`;
+      if (left === 0) clearInterval(resultsCountdown);
+    };
+    paint();
+    resultsCountdown = setInterval(paint, 250);
+  }
+
+  function onRoomReset() {
+    clearInterval(resultsCountdown);
+    document.getElementById('results-return').textContent = '';
+    backLobbyBtn.disabled = false;
+    backLobbyBtn.innerHTML = BACK_LOBBY_HTML;
     readyBtn.disabled = false;
     readyBtn.textContent = 'Estoy listo';
     document.getElementById('countdown').replaceChildren();
-    Router.show('lobby');
-  });
+    setPauseOverlay(false);
+    if (connected && selfId) Router.show('lobby');
+  }
 
   // WASD como control principal; las flechas siguen funcionando. Se usa
   // `e.code` (tecla física) para que funcione igual con Bloq Mayús activo.
