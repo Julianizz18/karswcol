@@ -1,0 +1,20 @@
+# Despliegue en Render (plan gratuito): solo el gateway (Node + WebSocket),
+# que también sirve el cliente. Redis/PostgreSQL y el stack de observabilidad
+# no se despliegan aquí (el código aún no depende de ellos).
+services:
+  - type: web
+    name: karswcol
+    runtime: docker
+    plan: free
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: GOOGLE_CLIENT_ID
+        sync: false          # se pide al crear el servicio en el dashboard
+      - key: SESSION_SECRET
+        generateValue: true  # Render genera un valor aleatorio
+      - key: LOG_LEVEL
+        value: info
+      # LOAD_TEST_TOKEN se deja sin definir: login sintético de k6 deshabilitado.
