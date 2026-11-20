@@ -1858,6 +1858,9 @@ function buildMinimap(track) {
   g.restore();
 }
 
+const MINIMAP_INTERVAL_MS = 50;
+let lastMinimapAt = 0;
+
 function drawMinimap(players) {
   if (!minimapBase) return;
   minimapCtx.clearRect(0, 0, minimap.width, minimap.height);
@@ -1982,7 +1985,12 @@ function frame(now) {
   updateAtmosphere(me, dt, now);
   updateWetTrack(state, dt);
   renderer.render(scene, camera);
-  drawMinimap(state.players);
+  // El servidor manda posiciones a 20 Hz: redibujar el minimapa a 60 Hz no
+  // aporta nada y cuesta un drawImage completo del canvas por frame.
+  if (now - lastMinimapAt >= MINIMAP_INTERVAL_MS) {
+    lastMinimapAt = now;
+    drawMinimap(state.players);
+  }
 }
 
 function isVisible() {
