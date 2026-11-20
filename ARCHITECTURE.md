@@ -130,4 +130,7 @@ algún botón del control una vez para que el navegador lo detecte.
   un proceso (hoy es un único proceso, una sola sala).
 - Matchmaking real con múltiples salas concurrentes (`MatchmakingService`
   ya está separado del resto para que esto no implique tocar el Game Engine).
-- Reconexión con token de sesión (HU06).
+
+Hecho en el Release 2 (antes pendiente): reconexión automática con la
+sesión firmada; quien se desconecta en plena carrera recupera su kart
+durante 30 s (`RaceRoom.handleDisconnect` y `RaceRoom.join`).
