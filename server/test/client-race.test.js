@@ -240,7 +240,7 @@ test('el cóndor: salida, última vuelta y rescates con su aviso', async () => {
   ws.receive({ type: 'event', kind: 'condor_rescue', playerId: '2', name: 'Sara', x: 5, y: 6 });
   assert.equal(toast(c), '🦅 El cóndor rescató a Sara');
   // Los objetos vienen del realm de jsdom: se comparan por contenido.
-  assert.equal(JSON.stringify(calls), JSON.stringify([['start', undefined], ['lastLap', undefined], ['rescue', { x: 10, y: 20 }], ['rescue', { x: 5, y: 6 }]]));
+  assert.equal(JSON.stringify(calls), JSON.stringify([['start', { greenInMs: 0 }], ['lastLap', undefined], ['rescue', { x: 10, y: 20 }], ['rescue', { x: 5, y: 6 }]]));
 });
 
 test('el anfitrión elige las vueltas y el HUD, los avisos y el cóndor las respetan', async () => {
@@ -261,4 +261,13 @@ test('el anfitrión elige las vueltas y el HUD, los avisos y el cóndor las resp
   assert.ok(calls.includes('lastLap'), 'al empezar la quinta vuelta');
   ws.receive({ type: 'event', kind: 'lap_completed', playerId: '1', lap: 5, lapTimeMs: 60000 });
   assert.match(toast(c), /Última vuelta completada/);
+});
+
+test('la salida: aviso de semáforo y «¡Ya!» justo cuando el servidor suelta los karts', async () => {
+  const c = createClient();
+  const ws = await joinLobby(c);
+  ws.receive({ type: 'race_start', totalLaps: 3, track, weather: null, greenInMs: 120 });
+  await waitFor(() => c.activeScreen() === 'screen-race');
+  assert.equal(toast(c), '🔴 Atentos al semáforo del cóndor…');
+  await waitFor(() => toast(c) === '🟢 ¡Ya!', 2000);
 });

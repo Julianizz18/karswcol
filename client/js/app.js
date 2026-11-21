@@ -561,7 +561,15 @@
       document.getElementById('hud-track').textContent = `${msg.track.name}`;
       Router.show('race');
       // El cóndor da la salida (no al volver a mitad de carrera).
-      if (!msg.rejoined) callCondor('start');
+      if (!msg.rejoined) {
+        // El semáforo del cóndor se pone en verde cuando el servidor suelta los karts.
+        const greenInMs = msg.greenInMs ?? 0;
+        callCondor('start', { greenInMs });
+        if (greenInMs > 0) {
+          showToast('🔴 Atentos al semáforo del cóndor…');
+          setTimeout(() => { if (isRaceActive()) showToast('🟢 ¡Ya!'); }, greenInMs);
+        }
+      }
     });
 
     Net.on('state', msg => {

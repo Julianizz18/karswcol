@@ -2277,7 +2277,9 @@ function buildCondor() {
 function showCondor(mode, data = {}) {
   if (!renderer) return;
   if (!condor) condor = buildCondor();
-  const durations = { start: 2600, lastLap: 3200, rescue: 1800 };
+  // En la salida, el verde llega cuando el servidor suelta los karts (greenInMs).
+  const greenInMs = mode === 'start' ? Math.max(0, data.greenInMs ?? 1000) : 0;
+  const durations = { start: greenInMs + 1500, lastLap: 3200, rescue: 1800 };
   if (!durations[mode]) return;
   Object.assign(condorState, { mode, start: performance.now(), duration: durations[mode], target: data });
   const { semaforo, banner, rope, lights } = condor.userData;
@@ -2321,8 +2323,11 @@ function updateCondor(now) {
     condor.rotateY(-Math.PI / 2); // el modelo mira hacia +x
     if (condorState.mode === 'start') {
       // Rojo, rojo, rojo… y verde: ¡ya!
-      const green = t > 0.35;
-      lights.forEach((l, i) => l.material.color.set(green ? (i === 2 ? '#3ccf6e' : '#203a24') : (t > 0.1 * (i + 1) ? '#ef4433' : '#3a1a1a')));
+      // Tres rojos repartidos hasta el verde, que coincide con el arranque real.
+      const elapsed = now - condorState.start;
+      const greenAt = condorState.target.greenInMs ?? 1000;
+      const green = elapsed >= greenAt;
+      lights.forEach((l, i) => l.material.color.set(green ? (i === 2 ? '#3ccf6e' : '#203a24') : (elapsed >= (greenAt * (i + 1)) / 4 ? '#ef4433' : '#3a1a1a')));
     }
   } else if (condorState.mode === 'rescue' && condorState.target) {
     // Picada sobre el kart rescatado y vuelta a subir.
