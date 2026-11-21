@@ -134,7 +134,9 @@ const Auth = (() => {
   }
 
   document.getElementById('btn-logout').addEventListener('click', logout);
-  const start = () => init().catch(err => showError(err.message || 'No se pudo iniciar sesión.'));
+  const start = () => {
+    init().catch(err => showError(err.message || 'No se pudo iniciar sesión.'));
+  };
   retryBtn.addEventListener('click', start);
   start();
 
