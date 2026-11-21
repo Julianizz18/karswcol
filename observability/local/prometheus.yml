@@ -14,6 +14,25 @@ scrape_configs:
       - targets: ['localhost:3000']
         labels:
           service: gateway
+          entorno: local
+
+  # Servidor en Render; ver ../prometheus/prometheus.yml para el token.
+  - job_name: karswcol-render
+    metrics_path: /metrics
+    scheme: https
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    authorization:
+      type: Bearer
+      credentials_file: ../prometheus/secretos/render_metrics_token
+    static_configs:
+      - targets: ['karswcol.onrender.com']
+        labels:
+          service: gateway
+          entorno: render
+    relabel_configs:
+      - target_label: job
+        replacement: karswcol
 
   - job_name: prometheus
     static_configs:

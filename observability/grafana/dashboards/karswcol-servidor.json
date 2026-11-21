@@ -29,6 +29,29 @@
   "templating": {
     "list": [
       {
+        "name": "entorno",
+        "label": "Entorno",
+        "type": "custom",
+        "query": "render,local",
+        "current": {
+          "text": "render",
+          "value": "render"
+        },
+        "options": [
+          {
+            "text": "render",
+            "value": "render",
+            "selected": true
+          },
+          {
+            "text": "local",
+            "value": "local",
+            "selected": false
+          }
+        ],
+        "hide": 0
+      },
+      {
         "name": "filtro",
         "label": "Buscar en logs",
         "type": "textbox",
@@ -87,7 +110,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "up{job=\"karswcol\"}",
+          "expr": "up{job=\"karswcol\", entorno=\"$entorno\"}",
           "legendFormat": ""
         }
       ],
@@ -161,7 +184,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "karswcol_room_state == 1",
+          "expr": "karswcol_room_state{entorno=\"$entorno\"} == 1",
           "legendFormat": "{{state}}",
           "instant": true,
           "range": false
@@ -223,7 +246,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum(karswcol_ws_connections)",
+          "expr": "sum(karswcol_ws_connections{entorno=\"$entorno\"})",
           "legendFormat": ""
         }
       ],
@@ -283,7 +306,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum(karswcol_room_players{kind=\"human\"})",
+          "expr": "sum(karswcol_room_players{kind=\"human\", entorno=\"$entorno\"})",
           "legendFormat": ""
         }
       ],
@@ -351,7 +374,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum(karswcol_room_players{kind=\"bot\"})",
+          "expr": "sum(karswcol_room_players{kind=\"bot\", entorno=\"$entorno\"})",
           "legendFormat": ""
         }
       ],
@@ -411,7 +434,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "max(karswcol_room_paused)",
+          "expr": "max(karswcol_room_paused{entorno=\"$entorno\"})",
           "legendFormat": ""
         }
       ],
@@ -484,7 +507,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum(increase(karswcol_races_started_total[$__range]))",
+          "expr": "sum(increase(karswcol_races_started_total{entorno=\"$entorno\"}[$__range]))",
           "legendFormat": ""
         }
       ],
@@ -545,7 +568,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "time() - karswcol_process_start_time_seconds",
+          "expr": "time() - karswcol_process_start_time_seconds{entorno=\"$entorno\"}",
           "legendFormat": ""
         }
       ],
@@ -618,7 +641,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(karswcol_tick_duration_seconds_bucket[1m])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(karswcol_tick_duration_seconds_bucket{entorno=\"$entorno\"}[1m])))",
           "legendFormat": "p50"
         },
         {
@@ -627,7 +650,7 @@
             "uid": "prometheus"
           },
           "refId": "B",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(karswcol_tick_duration_seconds_bucket[1m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(karswcol_tick_duration_seconds_bucket{entorno=\"$entorno\"}[1m])))",
           "legendFormat": "p95"
         },
         {
@@ -636,7 +659,7 @@
             "uid": "prometheus"
           },
           "refId": "C",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(karswcol_tick_duration_seconds_bucket[1m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(karswcol_tick_duration_seconds_bucket{entorno=\"$entorno\"}[1m])))",
           "legendFormat": "p99"
         }
       ],
@@ -715,7 +738,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(karswcol_tick_interval_seconds_bucket[1m])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(karswcol_tick_interval_seconds_bucket{entorno=\"$entorno\"}[1m])))",
           "legendFormat": "p50"
         },
         {
@@ -724,7 +747,7 @@
             "uid": "prometheus"
           },
           "refId": "B",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(karswcol_tick_interval_seconds_bucket[1m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(karswcol_tick_interval_seconds_bucket{entorno=\"$entorno\"}[1m])))",
           "legendFormat": "p95"
         },
         {
@@ -733,7 +756,7 @@
             "uid": "prometheus"
           },
           "refId": "C",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(karswcol_tick_interval_seconds_bucket[1m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(karswcol_tick_interval_seconds_bucket{entorno=\"$entorno\"}[1m])))",
           "legendFormat": "p99"
         }
       ],
@@ -812,7 +835,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum(rate(karswcol_ticks_total[1m]))",
+          "expr": "sum(rate(karswcol_ticks_total{entorno=\"$entorno\"}[1m]))",
           "legendFormat": "ticks/s"
         }
       ],
@@ -883,7 +906,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum by (kind) (rate(karswcol_laps_completed_total[2m])) * 60",
+          "expr": "sum by (kind) (rate(karswcol_laps_completed_total{entorno=\"$entorno\"}[2m])) * 60",
           "legendFormat": "{{kind}}"
         }
       ],
@@ -954,7 +977,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum by (kind) (rate(karswcol_game_events_total[2m])) * 60",
+          "expr": "sum by (kind) (rate(karswcol_game_events_total{entorno=\"$entorno\"}[2m])) * 60",
           "legendFormat": "{{kind}}"
         }
       ],
@@ -1025,7 +1048,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum by (reason) (increase(karswcol_races_finished_total[5m]))",
+          "expr": "sum by (reason) (increase(karswcol_races_finished_total{entorno=\"$entorno\"}[5m]))",
           "legendFormat": "{{reason}}"
         }
       ],
@@ -1109,7 +1132,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum by (type) (rate(karswcol_ws_messages_received_total[1m]))",
+          "expr": "sum by (type) (rate(karswcol_ws_messages_received_total{entorno=\"$entorno\"}[1m]))",
           "legendFormat": "{{type}}"
         }
       ],
@@ -1180,7 +1203,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum by (type) (rate(karswcol_ws_messages_sent_total[1m]))",
+          "expr": "sum by (type) (rate(karswcol_ws_messages_sent_total{entorno=\"$entorno\"}[1m]))",
           "legendFormat": "{{type}}"
         }
       ],
@@ -1251,7 +1274,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum(rate(karswcol_ws_bytes_sent_total[1m]))",
+          "expr": "sum(rate(karswcol_ws_bytes_sent_total{entorno=\"$entorno\"}[1m]))",
           "legendFormat": "salida"
         }
       ],
@@ -1322,7 +1345,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(karswcol_ws_broadcast_duration_seconds_bucket[1m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(karswcol_ws_broadcast_duration_seconds_bucket{entorno=\"$entorno\"}[1m])))",
           "legendFormat": "p95"
         },
         {
@@ -1331,7 +1354,7 @@
             "uid": "prometheus"
           },
           "refId": "B",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(karswcol_ws_broadcast_duration_seconds_bucket[1m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(karswcol_ws_broadcast_duration_seconds_bucket{entorno=\"$entorno\"}[1m])))",
           "legendFormat": "p99"
         }
       ],
@@ -1402,7 +1425,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum by (result) (rate(karswcol_ws_connections_total[1m]))",
+          "expr": "sum by (result) (rate(karswcol_ws_connections_total{entorno=\"$entorno\"}[1m]))",
           "legendFormat": "{{result}}"
         }
       ],
@@ -1473,7 +1496,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum by (reason) (rate(karswcol_join_rejections_total[2m])) * 60",
+          "expr": "sum by (reason) (rate(karswcol_join_rejections_total{entorno=\"$entorno\"}[2m])) * 60",
           "legendFormat": "{{reason}}"
         }
       ],
@@ -1557,7 +1580,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum by (route) (rate(karswcol_http_requests_total[1m]))",
+          "expr": "sum by (route) (rate(karswcol_http_requests_total{entorno=\"$entorno\"}[1m]))",
           "legendFormat": "{{route}}"
         }
       ],
@@ -1628,7 +1651,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(karswcol_http_request_duration_seconds_bucket[1m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(karswcol_http_request_duration_seconds_bucket{entorno=\"$entorno\"}[1m])))",
           "legendFormat": "{{route}}"
         }
       ],
@@ -1699,7 +1722,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum by (status) (rate(karswcol_http_requests_total[1m]))",
+          "expr": "sum by (status) (rate(karswcol_http_requests_total{entorno=\"$entorno\"}[1m]))",
           "legendFormat": "{{status}}"
         }
       ],
@@ -1783,7 +1806,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "rate(karswcol_process_cpu_seconds_total[1m])",
+          "expr": "rate(karswcol_process_cpu_seconds_total{entorno=\"$entorno\"}[1m])",
           "legendFormat": "CPU (1 = un núcleo)"
         }
       ],
@@ -1854,7 +1877,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "karswcol_process_resident_memory_bytes",
+          "expr": "karswcol_process_resident_memory_bytes{entorno=\"$entorno\"}",
           "legendFormat": "residente"
         },
         {
@@ -1863,7 +1886,7 @@
             "uid": "prometheus"
           },
           "refId": "B",
-          "expr": "sum(karswcol_nodejs_heap_size_used_bytes)",
+          "expr": "sum(karswcol_nodejs_heap_size_used_bytes{entorno=\"$entorno\"})",
           "legendFormat": "heap usado"
         },
         {
@@ -1872,7 +1895,7 @@
             "uid": "prometheus"
           },
           "refId": "C",
-          "expr": "sum(karswcol_nodejs_heap_size_total_bytes)",
+          "expr": "sum(karswcol_nodejs_heap_size_total_bytes{entorno=\"$entorno\"})",
           "legendFormat": "heap total"
         }
       ],
@@ -1943,7 +1966,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "karswcol_nodejs_eventloop_lag_p50_seconds",
+          "expr": "karswcol_nodejs_eventloop_lag_p50_seconds{entorno=\"$entorno\"}",
           "legendFormat": "p50"
         },
         {
@@ -1952,7 +1975,7 @@
             "uid": "prometheus"
           },
           "refId": "B",
-          "expr": "karswcol_nodejs_eventloop_lag_p99_seconds",
+          "expr": "karswcol_nodejs_eventloop_lag_p99_seconds{entorno=\"$entorno\"}",
           "legendFormat": "p99"
         }
       ],
@@ -2031,7 +2054,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum by (kind) (rate(karswcol_nodejs_gc_duration_seconds_sum[1m]))",
+          "expr": "sum by (kind) (rate(karswcol_nodejs_gc_duration_seconds_sum{entorno=\"$entorno\"}[1m]))",
           "legendFormat": "{{kind}}"
         }
       ],
@@ -2246,7 +2269,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "avg_over_time(up{job=\"karswcol\"}[$__range])",
+          "expr": "avg_over_time(up{job=\"karswcol\", entorno=\"$entorno\"}[$__range])",
           "legendFormat": ""
         }
       ],
@@ -2314,7 +2337,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum by (provider, result) (rate(karswcol_auth_logins_total[2m])) * 60",
+          "expr": "sum by (provider, result) (rate(karswcol_auth_logins_total{entorno=\"$entorno\"}[2m])) * 60",
           "legendFormat": "{{provider}} {{result}}"
         }
       ],
@@ -2385,7 +2408,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum(rate(karswcol_ws_messages_received_total{type=\"rate_limited\"}[2m])) * 60",
+          "expr": "sum(rate(karswcol_ws_messages_received_total{type=\"rate_limited\", entorno=\"$entorno\"}[2m])) * 60",
           "legendFormat": "descartados"
         }
       ],
@@ -2456,7 +2479,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum(rate(karswcol_ws_connections_total{result=\"rejected\"}[2m])) * 60",
+          "expr": "sum(rate(karswcol_ws_connections_total{result=\"rejected\", entorno=\"$entorno\"}[2m])) * 60",
           "legendFormat": "rechazadas"
         }
       ],

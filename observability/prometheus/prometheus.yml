@@ -17,6 +17,31 @@ scrape_configs:
       - targets: ['gateway:3000']
         labels:
           service: gateway
+          entorno: local
+
+  # Servidor desplegado en Render (https://karswcol.onrender.com). Su /metrics
+  # exige "Authorization: Bearer <METRICS_TOKEN>": el token se copia del
+  # dashboard de Render (Environment) a secretos/render_metrics_token
+  # (archivo ignorado por git). Sin ese archivo este target sale "down".
+  # Intervalo más largo que el local: el plan gratuito tarda en despertar.
+  - job_name: karswcol-render
+    metrics_path: /metrics
+    scheme: https
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/secretos/render_metrics_token
+    static_configs:
+      - targets: ['karswcol.onrender.com']
+        labels:
+          service: gateway
+          entorno: render
+    # Mismo job que el local para que dashboards y alertas (job="karswcol")
+    # sirvan para ambos; se distinguen por la etiqueta "entorno".
+    relabel_configs:
+      - target_label: job
+        replacement: karswcol
 
   - job_name: prometheus
     static_configs:
