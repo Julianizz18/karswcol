@@ -242,3 +242,23 @@ test('el cóndor: salida, última vuelta y rescates con su aviso', async () => {
   // Los objetos vienen del realm de jsdom: se comparan por contenido.
   assert.equal(JSON.stringify(calls), JSON.stringify([['start', undefined], ['lastLap', undefined], ['rescue', { x: 10, y: 20 }], ['rescue', { x: 5, y: 6 }]]));
 });
+
+test('el anfitrión elige las vueltas y el HUD, los avisos y el cóndor las respetan', async () => {
+  const calls = [];
+  const race3d = { supported: true, qualityMode: 'auto', setQualityMode() {}, setTrack() {}, update() {}, condor: mode => calls.push(mode) };
+  const c = createClient({ race3d });
+  const ws = await joinLobby(c);
+  c.document.querySelector('#laps-picker button[data-id="5"]').click();
+  assert.deepEqual(ws.sentOfType('select_laps').map(m => m.laps), [5]);
+  ws.receive({ type: 'race_start', totalLaps: 5, track, weather: null });
+  await waitFor(() => c.activeScreen() === 'screen-race');
+  ws.receive({ type: 'state', t: 0, rainActive: false, puddles: [], pickups: [], players: [player({ lap: 1 })] });
+  assert.equal(c.$('#hud-lap').textContent, 'Vuelta 1/5');
+  ws.receive({ type: 'event', kind: 'lap_completed', playerId: '1', lap: 2, lapTimeMs: 60000 });
+  assert.match(toast(c), /Vuelta 2\/5 completada/);
+  assert.ok(!calls.includes('lastLap'), 'todavía no es la última');
+  ws.receive({ type: 'event', kind: 'lap_completed', playerId: '1', lap: 4, lapTimeMs: 60000 });
+  assert.ok(calls.includes('lastLap'), 'al empezar la quinta vuelta');
+  ws.receive({ type: 'event', kind: 'lap_completed', playerId: '1', lap: 5, lapTimeMs: 60000 });
+  assert.match(toast(c), /Última vuelta completada/);
+});

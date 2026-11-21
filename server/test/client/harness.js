@@ -226,6 +226,8 @@ export function lobbyUpdate(overrides = {}) {
     selectedDifficulty: 'medio',
     timesOfDay: [{ id: 'dia', label: 'Día' }, { id: 'noche', label: 'Noche' }, { id: 'real', label: 'Hora real' }],
     selectedTimeOfDay: 'dia',
+    lapOptions: [1, 2, 3, 5],
+    totalLaps: 3,
     fillWithBots: false,
     botFillTarget: 6,
     hostId: '1',

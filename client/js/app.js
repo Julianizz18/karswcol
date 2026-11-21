@@ -4,6 +4,7 @@
   const FEMININE_ITEMS = new Set(['Arepa', 'Aguapanela', 'Lechona']);
   let lastJoinRequest = null; // último { name, color } enviado en "join"
   let pendingJoin = null;     // join en espera de que termine la carrera en curso
+  let totalLaps = 3;          // vueltas de la carrera en curso (las elige el anfitrión)
   let selectedColor = KART_COLORS[0];
   let vehicleIndex = 0;
 
@@ -288,7 +289,7 @@
    */
   // Solo el anfitrión configura la sala: a los demás se les deshabilitan los
   // controles (el servidor igual ignora sus cambios) y se les dice quién elige.
-  const HOST_CONTROLS = '#track-picker button, #track-prev, #track-next, #difficulty-picker button, #time-picker button, #btn-toggle-bots';
+  const HOST_CONTROLS = '#track-picker button, #track-prev, #track-next, #difficulty-picker button, #time-picker button, #laps-picker button, #btn-toggle-bots';
   let lastHost = { id: null, player: null }; // del último lobby_update
   let lastLobbyUpdate = null;
   let renderLobby = () => {}; // se define en wireServerEvents
@@ -497,6 +498,10 @@
       if (msg.difficulties) {
         renderPillPicker('difficulty-picker', msg.difficulties, msg.selectedDifficulty, id => Net.send('select_difficulty', { difficulty: id }));
       }
+      if (msg.lapOptions) {
+        const options = msg.lapOptions.map(n => ({ id: String(n), label: String(n) }));
+        renderPillPicker('laps-picker', options, String(msg.totalLaps), id => Net.send('select_laps', { laps: Number(id) }));
+      }
       if (msg.timesOfDay) {
         renderPillPicker('time-picker', msg.timesOfDay, msg.selectedTimeOfDay, id => Net.send('select_time', { timeOfDay: id }));
       }
@@ -542,6 +547,7 @@
     });
 
     Net.on('race_start', msg => {
+      totalLaps = msg.totalLaps || 3;
       Hud.reset();
       document.getElementById('countdown').replaceChildren();
       lastCrashed = false;
@@ -562,7 +568,7 @@
       Race.render(msg.players, selfId, msg.pickups, msg.rainActive, msg.puddles);
       const me = msg.players.find(p => p.id === selfId);
       if (me) {
-        document.getElementById('hud-lap').textContent = `Vuelta ${Math.min(me.lap, 3)}/3`;
+        document.getElementById('hud-lap').textContent = `Vuelta ${Math.min(me.lap, totalLaps)}/${totalLaps}`;
         document.getElementById('hud-weather').textContent = msg.rainActive ? '🌧️ ¡Aguacero!' : raceWeatherText;
         Hud.update(me, msg.rainActive);
         if (me.crashed && !lastCrashed) showToast('💥 ¡Al muro! Frena antes de la curva');
@@ -598,9 +604,9 @@
         showToast(msg.playerId === selfId ? '🦅 El cóndor te devolvió a la pista' : `🦅 El cóndor rescató a ${msg.name}`);
       } else if (msg.kind === 'lap_completed' && msg.playerId === selfId) {
         const lapTime = msg.lapTimeMs != null ? ` · ${formatLapTime(msg.lapTimeMs)}` : '';
-        showToast(msg.lap >= 3 ? `¡Última vuelta completada!${lapTime} 🏁` : `¡Vuelta ${msg.lap}/3 completada!${lapTime}`);
+        showToast(msg.lap >= totalLaps ? `¡Última vuelta completada!${lapTime} 🏁` : `¡Vuelta ${msg.lap}/${totalLaps} completada!${lapTime}`);
         // Empieza la última vuelta: el cóndor pasa con la pancarta.
-        if (msg.lap === 2) callCondor('lastLap');
+        if (totalLaps > 1 && msg.lap === totalLaps - 1) callCondor('lastLap');
       }
     });
 
