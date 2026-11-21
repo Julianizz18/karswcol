@@ -15,6 +15,8 @@ export const WALL_IMPACT_DAMPING = 0.3;
 export const WALL_IMPACT_MAX_SPEED = 1;
 // Tras un golpe el kart queda "aturdido" (trompo): no acelera durante estos ticks.
 export const CRASH_STUN_TICKS = 12;
+// Vueltas que puede elegir el anfitrión en el lobby (TOTAL_LAPS es el valor por defecto).
+export const LAP_OPTIONS = [1, 2, 3, 5];
 // El cóndor (rescate): un kart que acelera sin avanzar 3 s (trabado contra el
 // muro) o que va 4 s en contravía vuelve a la línea central, mirando hacia
 // adelante. Velocidad por debajo de la cual se considera "sin avanzar".

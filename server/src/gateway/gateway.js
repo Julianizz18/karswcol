@@ -91,7 +91,7 @@ function routeLabel(url, status) {
 }
 
 const CLIENT_MESSAGE_TYPES = new Set([
-  'join', 'ready', 'select_track', 'select_time', 'select_difficulty', 'toggle_bots', 'input', 'toggle_pause', 'restart', 'leave'
+  'join', 'ready', 'select_track', 'select_time', 'select_difficulty', 'toggle_bots', 'input', 'toggle_pause', 'restart', 'leave', 'select_laps'
 ]);
 
 // Límite de mensajes por conexión (token bucket). Un jugador real manda
@@ -420,6 +420,9 @@ export function createGateway({ clientDir, room, auth, metricsToken = process.en
           break;
         case 'select_time':
           room.selectTimeOfDay(String(msg.timeOfDay || ''), playerId);
+          break;
+        case 'select_laps':
+          room.selectLaps(Number(msg.laps), playerId);
           break;
         case 'select_difficulty':
           room.selectDifficulty(String(msg.difficulty || ''), playerId);

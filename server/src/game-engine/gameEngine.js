@@ -204,7 +204,7 @@ export class GameEngine {
     p.lapTimes.push(lapTimeMs);
     if (p.bestLapMs === null || lapTimeMs < p.bestLapMs) p.bestLapMs = lapTimeMs;
     p.lapStartedAt = now;
-    if (p.lap >= TOTAL_LAPS) {
+    if (p.lap >= (p.totalLaps ?? TOTAL_LAPS)) {
       p.finished = true;
       p.finishTime = now - raceStartedAt;
     }

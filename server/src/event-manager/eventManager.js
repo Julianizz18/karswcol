@@ -21,9 +21,9 @@ export class EventManager {
    * predecible. Ahora cada carrera sortea si llueve, en qué vuelta (de la 1
    * a la penúltima) y cuánto dura.
    */
-  planRain() {
+  planRain(totalLaps = TOTAL_LAPS) {
     this.rainWillHappen = this.random() < RAIN_CHANCE;
-    this.rainLap = 1 + Math.floor(this.random() * Math.max(1, TOTAL_LAPS - 1));
+    this.rainLap = 1 + Math.floor(this.random() * Math.max(1, totalLaps - 1));
     this.rainDurationMs = Math.round(RAIN_DURATION_MS * (1 - RAIN_DURATION_JITTER + this.random() * 2 * RAIN_DURATION_JITTER));
   }
 
@@ -31,11 +31,11 @@ export class EventManager {
    * `startWet`: si en la región está lloviendo de verdad (clima real), la
    * carrera arranca con la pista mojada y sigue así hasta el final.
    */
-  reset(startWet = false) {
+  reset(startWet = false, totalLaps = TOTAL_LAPS) {
     this.rainActive = startWet;
     this.rainEndsAt = startWet ? Infinity : null;
     this.rainTriggered = startWet;
-    this.planRain();
+    this.planRain(totalLaps);
   }
 
   /** Se invoca cuando el Game Engine reporta que un jugador completó una vuelta. */

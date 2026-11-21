@@ -1,6 +1,6 @@
 import { TRACKS, getTrackById } from './game-engine/trackCatalog.js';
 import {
-  TOTAL_LAPS, BOT_FILL_TARGET, BOT_COLORS, FINISH_GRACE_MS, RACE_TIME_LIMIT_MS, WET_CONDITIONS
+  TOTAL_LAPS, LAP_OPTIONS, BOT_FILL_TARGET, BOT_COLORS, FINISH_GRACE_MS, RACE_TIME_LIMIT_MS, WET_CONDITIONS
 } from './game-engine/gameplayConfig.js';
 import { DIFFICULTIES, DEFAULT_DIFFICULTY } from './game-engine/difficulty.js';
 import { GameEngine, TICK_MS } from './game-engine/gameEngine.js';
@@ -62,6 +62,7 @@ export class RaceRoom {
     this.playerStates = new Map(); // id -> estado físico (Game Engine), incluye bots
     this.trackId = TRACKS[0].id;
     this.difficulty = DEFAULT_DIFFICULTY;
+    this.totalLaps = TOTAL_LAPS;
     this.fillWithBots = false;
     this.botIds = new Set();
     this.weather = null; // WeatherService opcional (clima real por pista)
@@ -176,11 +177,11 @@ export class RaceRoom {
 
   /** Tiempo máximo hasta que la sala vuelva al lobby (para quien espera entrar). */
   estimatedWaitMs() {
-    if (this.state === 'countdown') return this.countdownValue * 1000 + RACE_TIME_LIMIT_MS + RESULTS_RETURN_MS;
+    if (this.state === 'countdown') return this.countdownValue * 1000 + this.raceTimeLimitMs + RESULTS_RETURN_MS;
     if (this.state === 'results') return RESULTS_RETURN_MS;
     if (this.state !== 'racing' || this.raceStartedAt === null) return 0;
     const now = this.raceNow();
-    let raceLeft = RACE_TIME_LIMIT_MS - (now - this.raceStartedAt);
+    let raceLeft = this.raceTimeLimitMs - (now - this.raceStartedAt);
     if (this.firstFinishAt !== null) raceLeft = Math.min(raceLeft, FINISH_GRACE_MS - (now - this.firstFinishAt));
     return Math.max(0, raceLeft) + RESULTS_RETURN_MS;
   }
@@ -191,7 +192,7 @@ export class RaceRoom {
     const messages = [];
     if (this.state === 'racing') {
       const weather = this.weatherFor(this.trackId);
-      messages.push({ type: 'race_start', totalLaps: TOTAL_LAPS, track: this.track, weather, wetStart: false, difficulty: this.difficulty, rejoined: true });
+      messages.push({ type: 'race_start', totalLaps: this.totalLaps, track: this.track, weather, wetStart: false, difficulty: this.difficulty, rejoined: true });
       if (this.paused) {
         const by = this.playerStates.get(this.pausedBy);
         messages.push({ type: 'pause', paused: true, by: by ? by.name : null, byId: this.pausedBy });
@@ -325,6 +326,19 @@ export class RaceRoom {
     this.sendLobbyUpdate();
   }
 
+  /** Número de vueltas de la carrera: lo elige el anfitrión (LAP_OPTIONS). */
+  selectLaps(laps, by) {
+    if (this.state !== 'lobby' || !this.canConfigure(by)) return;
+    if (!LAP_OPTIONS.includes(laps)) return;
+    this.totalLaps = laps;
+    this.sendLobbyUpdate();
+  }
+
+  /** Tiempo límite proporcional a las vueltas (7 min para 3 vueltas). */
+  get raceTimeLimitMs() {
+    return (RACE_TIME_LIMIT_MS / TOTAL_LAPS) * this.totalLaps;
+  }
+
   selectDifficulty(difficultyId, by) {
     if (this.state !== 'lobby' || !this.canConfigure(by)) return;
     if (!DIFFICULTIES[difficultyId]) return;
@@ -364,6 +378,8 @@ export class RaceRoom {
       selectedTrackId: this.trackId,
       difficulties: Object.entries(DIFFICULTIES).map(([id, d]) => ({ id, label: d.label })),
       selectedDifficulty: this.difficulty,
+      lapOptions: LAP_OPTIONS,
+      totalLaps: this.totalLaps,
       timesOfDay: TIMES_OF_DAY,
       selectedTimeOfDay: this.timeOfDay,
       fillWithBots: this.fillWithBots,
@@ -411,6 +427,7 @@ export class RaceRoom {
       const color = BOT_COLORS[i % BOT_COLORS.length];
       const p = this.gameEngine.createPlayerState(id, name, color, humanCount + i, this.track);
       p.isBot = true;
+      p.totalLaps = this.totalLaps;
       p.botLane = ((i % 3) - 1) * this.track.roadWidth * 0.18; // izquierda, centro o derecha
       this.playerStates.set(id, p);
       this.botIds.add(id);
@@ -436,9 +453,10 @@ export class RaceRoom {
     // Si en la región llueve de verdad, se arranca con la pista mojada y charcos llenos.
     const weather = this.weatherFor(this.trackId);
     const wetStart = !!weather && WET_CONDITIONS.includes(weather.condition);
-    this.eventManager.reset(wetStart);
+    this.eventManager.reset(wetStart, this.totalLaps);
     this.puddles = new PuddleField(this.track);
     if (wetStart) this.puddles.update(Infinity, true);
+    for (const p of this.playerStates.values()) p.totalLaps = this.totalLaps;
     this.shuffleGrid();
     if (this.fillWithBots) this.spawnBots();
     metrics.racesStarted.inc({ track: this.trackId });
@@ -451,7 +469,7 @@ export class RaceRoom {
     });
     this.broadcast({
       type: 'race_start',
-      totalLaps: TOTAL_LAPS,
+      totalLaps: this.totalLaps,
       track: this.track,
       weather,
       wetStart,
@@ -537,7 +555,7 @@ export class RaceRoom {
     // esto, un jugador quieto o desconectado dejaba la carrera colgada.
     const allFinished = [...this.playerStates.values()].every(p => p.finished);
     const graceExpired = this.firstFinishAt !== null && now - this.firstFinishAt >= FINISH_GRACE_MS;
-    const timeLimitExpired = now - this.raceStartedAt >= RACE_TIME_LIMIT_MS;
+    const timeLimitExpired = now - this.raceStartedAt >= this.raceTimeLimitMs;
     if (allFinished || graceExpired || timeLimitExpired) {
       this.finishRace(allFinished ? 'all_finished' : graceExpired ? 'grace' : 'time_limit');
     }

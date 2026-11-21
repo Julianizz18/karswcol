@@ -222,3 +222,27 @@ test('si en resultados se va alguien que ya votó, los demás siguen esperando',
   assert.equal(room.state, 'results');
   assert.deepEqual(messages.filter(m => m.kind === 'lobby_votes').at(-1), { type: 'event', kind: 'lobby_votes', votes: 0, total: 2 });
 });
+
+test('el anfitrión elige el número de vueltas y la carrera termina en esa vuelta', () => {
+  join('1', 'johan');
+  join('2', 'sara');
+  room.selectLaps(5, '2');
+  assert.equal(room.totalLaps, 3, 'quien no es anfitrión no la cambia');
+  room.selectLaps(4, '1');
+  assert.equal(room.totalLaps, 3, 'solo valores permitidos');
+  room.selectLaps(1, '1');
+  assert.equal(room.totalLaps, 1);
+  assert.equal(messages.filter(m => m.type === 'lobby_update').at(-1).totalLaps, 1);
+  room.fillWithBots = true;
+  room.startRace();
+  assert.equal(messages.filter(m => m.type === 'race_start').at(-1).totalLaps, 1);
+  assert.ok([...room.playerStates.values()].every(p => p.totalLaps === 1), 'humanos y bots');
+  const p = room.playerStates.get('1');
+  for (const cp of room.track.checkpoints) {
+    p.x = cp.x;
+    p.y = cp.y;
+    room.gameEngine.evaluateCheckpoint(p, room.raceNow() + 1000, room.raceStartedAt, room.track);
+  }
+  assert.equal(p.finished, true, 'termina al completar 1 vuelta');
+  assert.equal(room.raceTimeLimitMs, RACE_TIME_LIMIT_MS / 3);
+});
