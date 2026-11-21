@@ -12,7 +12,14 @@
 // (x, altura, y) en 3D, y un ángulo θ apunta hacia (cos θ, 0, sin θ).
 import * as THREE from '../vendor/three.module.min.js';
 
-const INTERP_DELAY_MS = 70;   // un poco más que un tick del servidor (50 ms)
+// Se dibuja dos ticks en el pasado: con 70 ms, un estado que llegaba tarde
+// (la red o el servidor con carga, k6 midió gaps de hasta 293 ms) dejaba al
+// kart congelado en la última posición y luego saltaba.
+const INTERP_DELAY_MS = 100;
+const SNAPSHOT_BUFFER = 6;
+// Calidad "Auto": arranca en "media" (sombras 1024, resolución 1.25x). "Alta"
+// se elige a mano en el lobby; la adaptativa solo baja desde aquí.
+const AUTO_START_QUALITY = 1;
 const CAM_BACK = 40;
 const CAM_HEIGHT = 15;
 const LOOK_AHEAD = 40;
@@ -54,7 +61,7 @@ try {
 } catch {
   // Sin localStorage (modo privado estricto): se queda en automático.
 }
-let qualityIndex = qualityMode === 'auto' ? 0 : QUALITY_LEVELS.findIndex(l => l.name === qualityMode);
+let qualityIndex = qualityMode === 'auto' ? AUTO_START_QUALITY : QUALITY_LEVELS.findIndex(l => l.name === qualityMode);
 const qualityMeter = { since: 0, frames: 0, warmupUntil: 0 };
 
 function quality() {
@@ -93,7 +100,7 @@ function applyQuality() {
 function setQualityMode(mode) {
   if (mode !== 'auto' && !QUALITY_LEVELS.some(l => l.name === mode)) return;
   qualityMode = mode;
-  qualityIndex = mode === 'auto' ? 0 : QUALITY_LEVELS.findIndex(l => l.name === mode);
+  qualityIndex = mode === 'auto' ? AUTO_START_QUALITY : QUALITY_LEVELS.findIndex(l => l.name === mode);
   try {
     localStorage.setItem(QUALITY_STORAGE_KEY, mode);
   } catch {
@@ -1150,6 +1157,21 @@ function setTrack(track, weather) {
   resetQualityMeter();
   buildMinimap(track);
   scene.add(trackGroup);
+  precompileShaders();
+}
+
+/**
+ * Compila los shaders de toda la escena al cargar la pista (con el cóndor
+ * visible un instante), para que la primera aparición del cóndor o de un
+ * material nuevo no cause un tirón en plena carrera.
+ */
+function precompileShaders() {
+  if (!condor) condor = buildCondor();
+  if (typeof renderer.compile !== 'function') return;
+  const wasVisible = condor.visible;
+  condor.visible = true;
+  renderer.compile(scene, camera);
+  condor.visible = wasVisible;
 }
 
 // ---------- Vehículos y objetos ----------
@@ -2020,6 +2042,10 @@ const CONDOR_WHITE = '#f1efe8';
 const VUELTIAO_CREAM = '#eadcb4';
 let condor = null;
 const condorState = { mode: null, start: 0, duration: 0, target: null };
+// Vectores reutilizados en cada cuadro (sin crear objetos nuevos a 60 FPS).
+const condorForward = new THREE.Vector3();
+const condorSide = new THREE.Vector3();
+const camDesired = new THREE.Vector3();
 
 function buildCondor() {
   const root = new THREE.Group();
@@ -2136,7 +2162,7 @@ function updateCondor(now) {
   wings.forEach(({ pivot, side }) => { pivot.rotation.x = side * flap; });
   body.rotation.z = Math.sin(now / 420) * 0.06;
 
-  const forward = new THREE.Vector3();
+  const forward = condorForward;
   camera.getWorldDirection(forward);
   forward.y = 0;
   forward.normalize();
@@ -2146,7 +2172,7 @@ function updateCondor(now) {
     // Entra desde arriba, se queda frente a la cámara y se va hacia un lado.
     const enter = ease(Math.min(1, t / 0.25));
     const leave = t > 0.8 ? (t - 0.8) / 0.2 : 0;
-    const side = new THREE.Vector3(-forward.z, 0, forward.x);
+    const side = condorSide.set(-forward.z, 0, forward.x);
     condor.position.copy(camera.position)
       .addScaledVector(forward, 42)
       .addScaledVector(side, leave * 60);
@@ -2212,7 +2238,7 @@ function frame(now) {
     const selfVehicle = vehicles.get(me.id);
     const back = CAM_BACK + (selfVehicle ? selfVehicle.length * 0.55 : 0);
     const height = CAM_HEIGHT + (selfVehicle ? selfVehicle.height * 0.45 : 0);
-    const desired = new THREE.Vector3(me.x - fx * back, height, me.y - fz * back);
+    const desired = camDesired.set(me.x - fx * back, height, me.y - fz * back);
     if (camera.userData.snapped) camera.position.lerp(desired, 1 - Math.exp(-dt * 12));
     else {
       camera.position.copy(desired);
@@ -2263,7 +2289,7 @@ function update(players, id, pickups, rainActive, puddles = []) {
   if (!renderer) return;
   selfId = id;
   snapshots.push({ t: performance.now(), players, pickups, rainActive, puddles });
-  if (snapshots.length > 4) snapshots.shift();
+  if (snapshots.length > SNAPSHOT_BUFFER) snapshots.shift();
   if (!rafHandle && isVisible()) {
     lastFrame = 0;
     rafHandle = requestAnimationFrame(frame);

@@ -15,7 +15,7 @@ import { TRACKS } from '../src/game-engine/trackCatalog.js';
 
 let dom;
 let Race3D;
-const renderer = { renders: 0, pixelRatio: null, shadowMap: {}, setPixelRatio(r) { this.pixelRatio = r; }, setSize() {}, render() { this.renders++; } };
+const renderer = { renders: 0, compiles: 0, pixelRatio: null, shadowMap: {}, setPixelRatio(r) { this.pixelRatio = r; }, setSize() {}, render() { this.renders++; }, compile() { this.compiles++; } };
 
 function fakeContext2D(canvas) {
   const gradient = { addColorStop() {} };
@@ -91,7 +91,7 @@ test('recupera la calidad guardada y permite cambiarla', () => {
   assert.equal(Race3D.quality, 'baja');
   Race3D.setQualityMode('auto');
   assert.equal(Race3D.qualityMode, 'auto');
-  assert.equal(Race3D.quality, 'alta');
+  assert.equal(Race3D.quality, 'media', 'Auto arranca en media');
 });
 
 const WEATHERS = [
@@ -113,6 +113,7 @@ test('construye las cinco pistas con distintos climas, de día y de noche', () =
     assert.equal(Race3D.weather, weather);
   });
   for (const weather of WEATHERS) Race3D.setTrack(roundTrip(TRACKS[0]), weather);
+  assert.ok(renderer.compiles >= TRACKS.length, 'precompila los shaders en cada pista');
 });
 
 test('el bucle dibuja karts, objetos en 3D, lluvia y charcos', async () => {
