@@ -117,7 +117,7 @@
   }
 
   function stepVehicle(dir) {
-    selectVehicle(vehicleIndex + dir, dir);
+    selectVehicle(vehicleIndex + dir, dir).catch(err => console.error('No se pudo cambiar el vehículo', err));
   }
 
   KART_COLORS.forEach((c, i) => {
@@ -128,7 +128,9 @@
     dot.setAttribute('aria-label', KART_VEHICLE_NAMES[c] || '');
     dot.title = KART_VEHICLE_NAMES[c] || '';
     dot.style.setProperty('--c', c);
-    dot.addEventListener('click', () => selectVehicle(i, i > vehicleIndex ? 1 : -1));
+    dot.addEventListener('click', () => {
+      selectVehicle(i, i > vehicleIndex ? 1 : -1).catch(err => console.error('No se pudo cambiar el vehículo', err));
+    });
     vehicleDots.appendChild(dot);
   });
 
@@ -674,7 +676,11 @@
         showConnBanner('El servidor cerró la conexión por exceso de mensajes.', { retry: true });
         return;
       }
-      reconnect();
+      reconnect().catch(err => {
+        reconnecting = false;
+        console.error('Falló la reconexión', err);
+        showConnBanner('No se pudo reconectar con el servidor.', { retry: true });
+      });
     });
   }
 

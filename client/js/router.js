@@ -44,7 +44,13 @@ const Router = (() => {
     const first = !document.querySelector('.screen.active');
     if (name === 'race' || first || reduceMotion.matches || !wipe || !wipe.animate) return swap(name);
     pending = name;
-    runWipe();
+    runWipe().catch(err => {
+      // Si la animación falla, igual se llega a la pantalla pedida.
+      console.error('Falló la transición de pantalla', err);
+      wiping = false;
+      if (pending) swap(pending);
+      pending = null;
+    });
   }
 
   document.addEventListener('click', e => {

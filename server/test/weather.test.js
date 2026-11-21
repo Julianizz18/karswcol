@@ -77,3 +77,18 @@ test('si falla al arrancar, reintenta pronto en vez de esperar el ciclo completo
   assert.equal(calls, 2);
   assert.equal(service.getForTrack('andes').source, 'real');
 });
+
+test('un fallo inesperado del refresco en segundo plano no deja una promesa rechazada', async () => {
+  const service = new WeatherService({ fetchImpl: fakeFetch([]).fetchImpl });
+  service.refresh = async () => { throw new Error('fallo inesperado'); };
+  const unhandled = [];
+  const onUnhandled = err => unhandled.push(err);
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    service.refreshInBackground();
+    await new Promise(resolve => setTimeout(resolve, 20));
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
+  assert.deepEqual(unhandled, []);
+});

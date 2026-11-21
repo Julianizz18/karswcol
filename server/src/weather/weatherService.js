@@ -49,8 +49,8 @@ export class WeatherService {
   }
 
   start() {
-    this.refresh();
-    this.timer = setInterval(() => this.refresh(), this.refreshMs);
+    this.refreshInBackground();
+    this.timer = setInterval(() => this.refreshInBackground(), this.refreshMs);
     // No mantiene vivo el proceso por sí solo (pruebas, apagado limpio).
     if (this.timer.unref) this.timer.unref();
   }
@@ -60,6 +60,11 @@ export class WeatherService {
     if (this.retryTimer) clearTimeout(this.retryTimer);
     this.timer = null;
     this.retryTimer = null;
+  }
+
+  /** Lanza refresh() sin esperarlo; un error inesperado se registra en vez de quedar como promesa rechazada. */
+  refreshInBackground() {
+    this.refresh().catch(err => logger.error('weather.refresh_crashed', { err: err.message }));
   }
 
   /** Una sola petición para todas las ciudades (Open-Meteo acepta varias coordenadas). */
@@ -99,7 +104,7 @@ export class WeatherService {
       if (this.timer && !this.retryTimer) {
         this.retryTimer = setTimeout(() => {
           this.retryTimer = null;
-          this.refresh();
+          this.refreshInBackground();
         }, this.retryMs);
         if (this.retryTimer.unref) this.retryTimer.unref();
       }
