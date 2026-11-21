@@ -29,6 +29,16 @@ test('con sesión válida muestra el menú, el saludo y el nombre sugerido', asy
   c.close();
 });
 
+test('no pone en la página una foto que no sea https de Google', async () => {
+  for (const picture of ['javascript:alert(1)', 'http://lh3.googleusercontent.com/a/x', 'https://evil.example.com/x.png', 'no-es-url']) {
+    const c = createClient({ fetch: async () => jsonResponse(200, { user: { name: 'Sara', picture } }) });
+    await waitFor(() => c.activeScreen() === 'screen-menu');
+    assert.equal(c.$('#user-avatar').hidden, true, picture);
+    assert.equal(c.$('#user-avatar').getAttribute('src'), null, picture);
+    c.close();
+  }
+});
+
 test('sin sesión muestra el botón de Google y al iniciar sesión entra al menú', async () => {
   const google = fakeGoogle();
   const requests = [];

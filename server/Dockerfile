@@ -5,7 +5,9 @@ FROM node:22-alpine
 WORKDIR /app/server
 
 COPY server/package*.json ./
-RUN npm ci --omit=dev
+# --ignore-scripts: ninguna dependencia necesita scripts de instalación, así
+# un paquete comprometido no puede ejecutar código al construir la imagen.
+RUN npm ci --omit=dev --ignore-scripts
 
 COPY server/src ./src
 COPY client /app/client

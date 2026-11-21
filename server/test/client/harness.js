@@ -164,7 +164,9 @@ export function createClient({ fetch, google, race3d, gamepads = [], storage = {
   const ctx = dom.getInternalVMContext();
   for (const name of CLIENT_SCRIPTS) {
     const file = path.join(CLIENT_DIR, 'js', name);
-    vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
+    // Solo ejecuta los archivos fijos de CLIENT_SCRIPTS (client/js del repo),
+    // dentro del sandbox de jsdom; nunca entrada externa.
+    vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file }); // NOSONAR: código propio del repo en sandbox de pruebas
   }
 
   const $ = sel => window.document.querySelector(sel);
@@ -179,7 +181,7 @@ export function createClient({ fetch, google, race3d, gamepads = [], storage = {
     /** La próxima conexión WebSocket falla (para probar la reconexión). */
     failNextConnections(n = 1) { for (let i = 0; i < n; i++) FakeWebSocket.nextBehavior.push('fail'); },
     /** Evalúa una expresión en el contexto del cliente (p. ej. "Race"). */
-    eval(code) { return vm.runInContext(code, ctx); },
+    eval(code) { return vm.runInContext(code, ctx); }, // NOSONAR: solo expresiones literales escritas en las pruebas
     activeScreen() { return window.document.querySelector('.screen.active')?.id; },
     navigations() { return errors.filter(e => /navigation/i.test(e)).length; },
     close() { window.close(); }

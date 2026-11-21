@@ -30,7 +30,7 @@ jobs:
           node-version: ${{ inputs.node-version }}
           cache: npm
           cache-dependency-path: server/package-lock.json
-      - run: npm ci
+      - run: npm ci --ignore-scripts # ninguna dependencia necesita scripts de instalación
       - name: Pruebas con cobertura (servidor + cliente)
         run: npm run coverage
       - name: Revisar la sintaxis de los scripts del cliente

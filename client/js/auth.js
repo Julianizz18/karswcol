@@ -20,13 +20,26 @@ const Auth = (() => {
     retryBtn.hidden = false;
   }
 
+  // La foto viene del servidor, que ya la filtra; aun así solo se acepta una
+  // URL https de Google para que nunca llegue al DOM un "javascript:" u otro
+  // esquema peligroso.
+  function safePictureUrl(url) {
+    try {
+      const parsed = new URL(String(url || ''));
+      return parsed.protocol === 'https:' && parsed.hostname.endsWith('.googleusercontent.com') ? parsed.href : '';
+    } catch {
+      return '';
+    }
+  }
+
   function showUser(u) {
     user = u;
     document.getElementById('user-chip').hidden = false;
     document.getElementById('user-name').textContent = u.name;
     const avatar = document.getElementById('user-avatar');
-    avatar.hidden = !u.picture;
-    if (u.picture) avatar.src = u.picture;
+    const picture = safePictureUrl(u.picture);
+    avatar.hidden = !picture;
+    if (picture) avatar.src = picture;
     const firstName = (u.name || '').trim().split(/\s+/)[0];
     document.getElementById('menu-greeting').textContent = firstName ? `Hola, ${firstName}` : 'Hola';
     const nameInput = document.getElementById('name-input');
