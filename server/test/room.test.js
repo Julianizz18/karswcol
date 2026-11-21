@@ -1,7 +1,7 @@
 import { test, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { RaceRoom, RECONNECT_GRACE_MS, RESULTS_RETURN_MS } from '../src/raceRoom.js';
-import { RACE_TIME_LIMIT_MS } from '../src/game-engine/gameplayConfig.js';
+import { RACE_TIME_LIMIT_MS, START_HOLD_MS } from '../src/game-engine/gameplayConfig.js';
 
 // Ciclo de vida de la sala en el lobby: entrar, salir y arrancar.
 
@@ -167,7 +167,7 @@ test('quien llega con la carrera en curso recibe cuánto falta como máximo', ()
   mock.timers.tick(60_000);
   const late = join('2', 'sara');
   assert.match(late.rejection, /carrera en curso/);
-  assert.equal(late.waitMs, RACE_TIME_LIMIT_MS - 60_000 + RESULTS_RETURN_MS);
+  assert.equal(late.waitMs, RACE_TIME_LIMIT_MS - 60_000 + START_HOLD_MS + RESULTS_RETURN_MS);
 });
 
 test('en el lobby un rechazo (sala llena) no trae tiempo de espera', () => {
@@ -245,4 +245,19 @@ test('el anfitrión elige el número de vueltas y la carrera termina en esa vuel
   }
   assert.equal(p.finished, true, 'termina al completar 1 vuelta');
   assert.equal(room.raceTimeLimitMs, RACE_TIME_LIMIT_MS / 3);
+});
+
+test('nadie se mueve hasta que el semáforo se pone en verde', () => {
+  join('1', 'johan');
+  room.startRace();
+  assert.equal(messages.filter(m => m.type === 'race_start').at(-1).greenInMs, START_HOLD_MS);
+  const p = room.playerStates.get('1');
+  const start = { x: p.x, y: p.y };
+  room.setInput('1', { up: true });
+  mock.timers.tick(START_HOLD_MS - 100);
+  assert.equal(p.x, start.x, 'quieto en rojo aunque acelere');
+  assert.equal(p.y, start.y);
+  assert.ok(messages.filter(m => m.type === 'state').length > 0, 'igual recibe estados');
+  mock.timers.tick(500);
+  assert.ok(p.x !== start.x || p.y !== start.y, 'arranca en verde');
 });

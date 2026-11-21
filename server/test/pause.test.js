@@ -2,7 +2,7 @@ import { test, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { RaceRoom, MAX_PAUSES_PER_PLAYER } from '../src/raceRoom.js';
 import { TICK_MS } from '../src/game-engine/gameEngine.js';
-import { RACE_TIME_LIMIT_MS } from '../src/game-engine/gameplayConfig.js';
+import { RACE_TIME_LIMIT_MS, START_HOLD_MS } from '../src/game-engine/gameplayConfig.js';
 
 // Pausa de carrera: se prueba con reloj simulado (Date y setInterval) para
 // avanzar el tiempo sin esperar de verdad.
@@ -52,7 +52,8 @@ test('el tiempo en pausa no cuenta en el reloj de carrera', () => {
   mock.timers.tick(60_000);
   room.togglePause('1');
   mock.timers.tick(TICK_MS);
-  assert.equal(messagesOfType('state').at(-1).t, TICK_MS * 11);
+  // El cronómetro arranca en el verde (START_HOLD_MS después de la salida).
+  assert.equal(messagesOfType('state').at(-1).t, TICK_MS * 11 - START_HOLD_MS);
 });
 
 test('la pausa no consume el tiempo límite de la carrera', () => {

@@ -2,7 +2,8 @@ import {
   TURN_SPEED, ACCEL, BRAKE, FRICTION, MAX_SPEED, WALL_GRAZE_DAMPING, WALL_IMPACT_DEPTH, WALL_IMPACT_DAMPING, WALL_IMPACT_MAX_SPEED, CRASH_STUN_TICKS, GRIP, SKID_SLIP_ANGLE, SKID_SCRUB, SKID_MAX_SCRUB,
   TOTAL_LAPS, BOOST_DURATION_MS, BOOST_MULTIPLIER,
   PUDDLE_GRIP_FACTOR, PUDDLE_DRAG, AQUAPLANING_MIN_SPEED,
-  STUCK_SPEED, STUCK_RESCUE_TICKS, WRONG_WAY_RESCUE_TICKS, WRONG_WAY_ANGLE
+  STUCK_SPEED, STUCK_RESCUE_TICKS, WRONG_WAY_RESCUE_TICKS, WRONG_WAY_ANGLE,
+  KART_RADIUS, KART_BUMP_DAMPING
 } from './gameplayConfig.js';
 
 // Game Engine — server-authoritative (HU02, componente "Game Engine" de la
@@ -213,6 +214,52 @@ export class GameEngine {
 
   applyBoost(p, now) {
     p.boostUntil = now + BOOST_DURATION_MS;
+  }
+
+  /**
+   * Colisiones entre karts, después de mover a todos en el tick. Cada kart es
+   * un círculo de KART_RADIUS: si dos se solapan se separan a partes iguales
+   * y el que se movía hacia el otro pierde velocidad (un choque por detrás o
+   * de frente; un roce de lado casi no frena). Los que ya terminaron quedan
+   * quietos en la meta y no colisionan. Devuelve cuántos choques hubo.
+   */
+  resolveCollisions(players, track) {
+    const active = players.filter(p => !p.finished);
+    const minDist = KART_RADIUS * 2;
+    let bumps = 0;
+    for (let i = 0; i < active.length; i++) {
+      for (let j = i + 1; j < active.length; j++) {
+        const a = active[i];
+        const b = active[j];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let dist = Math.hypot(dx, dy);
+        if (dist >= minDist) continue;
+        if (dist < 1e-6) {
+          // Exactamente encima (p. ej. al reaparecer): se separan de lado.
+          dx = Math.cos(a.angle + Math.PI / 2);
+          dy = Math.sin(a.angle + Math.PI / 2);
+          dist = 1;
+        }
+        const nx = dx / dist;
+        const ny = dy / dist;
+        const push = (minDist - dist) / 2;
+        a.x -= nx * push;
+        a.y -= ny * push;
+        b.x += nx * push;
+        b.y += ny * push;
+        // Quien iba hacia el otro (componente de su velocidad sobre la normal) frena.
+        const towardA = a.speed * (Math.cos(a.moveAngle) * nx + Math.sin(a.moveAngle) * ny);
+        const towardB = -b.speed * (Math.cos(b.moveAngle) * nx + Math.sin(b.moveAngle) * ny);
+        if (towardA > 0) a.speed *= 1 - (1 - KART_BUMP_DAMPING) * Math.min(1, towardA / Math.max(Math.abs(a.speed), 1e-6));
+        if (towardB > 0) b.speed *= 1 - (1 - KART_BUMP_DAMPING) * Math.min(1, towardB / Math.max(Math.abs(b.speed), 1e-6));
+        // Empujados contra el borde: siguen dentro de la pista.
+        this.confineToRoad(a, track);
+        this.confineToRoad(b, track);
+        bumps++;
+      }
+    }
+    return bumps;
   }
 
   /**

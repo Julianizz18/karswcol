@@ -15,6 +15,14 @@ export const WALL_IMPACT_DAMPING = 0.3;
 export const WALL_IMPACT_MAX_SPEED = 1;
 // Tras un golpe el kart queda "aturdido" (trompo): no acelera durante estos ticks.
 export const CRASH_STUN_TICKS = 12;
+// Colisión entre karts: cada kart es un círculo de este radio (≈ el ancho de
+// un taxi). Al chocar se separan y el que venía empujando pierde velocidad.
+export const KART_RADIUS = 9;
+export const KART_BUMP_DAMPING = 0.7;   // velocidad que conserva quien choca de frente/por detrás
+// Salida: el semáforo del cóndor enciende tres rojos y luego verde. Hasta el
+// verde nadie se mueve (el servidor ignora el acelerador) y el cronómetro
+// arranca en el verde.
+export const START_HOLD_MS = 3000;
 // Vueltas que puede elegir el anfitrión en el lobby (TOTAL_LAPS es el valor por defecto).
 export const LAP_OPTIONS = [1, 2, 3, 5];
 // El cóndor (rescate): un kart que acelera sin avanzar 3 s (trabado contra el

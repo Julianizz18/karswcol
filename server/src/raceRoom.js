@@ -1,6 +1,6 @@
 import { TRACKS, getTrackById } from './game-engine/trackCatalog.js';
 import {
-  TOTAL_LAPS, LAP_OPTIONS, BOT_FILL_TARGET, BOT_COLORS, FINISH_GRACE_MS, RACE_TIME_LIMIT_MS, WET_CONDITIONS
+  TOTAL_LAPS, LAP_OPTIONS, START_HOLD_MS, BOT_FILL_TARGET, BOT_COLORS, FINISH_GRACE_MS, RACE_TIME_LIMIT_MS, WET_CONDITIONS
 } from './game-engine/gameplayConfig.js';
 import { DIFFICULTIES, DEFAULT_DIFFICULTY } from './game-engine/difficulty.js';
 import { GameEngine, TICK_MS } from './game-engine/gameEngine.js';
@@ -52,6 +52,7 @@ export class RaceRoom {
     this.countdownHandle = null;
     this.tickHandle = null;
     this.raceStartedAt = null;
+    this.greenAt = 0; // momento del semáforo en verde (reloj de carrera)
     this.firstFinishAt = null;
     // Pausa: el reloj de carrera descuenta el tiempo pausado, así los
     // tiempos de vuelta, boosts, lluvia y el límite de carrera se congelan.
@@ -192,7 +193,7 @@ export class RaceRoom {
     const messages = [];
     if (this.state === 'racing') {
       const weather = this.weatherFor(this.trackId);
-      messages.push({ type: 'race_start', totalLaps: this.totalLaps, track: this.track, weather, wetStart: false, difficulty: this.difficulty, rejoined: true });
+      messages.push({ type: 'race_start', greenInMs: Math.max(0, this.greenAt - this.raceNow()), totalLaps: this.totalLaps, track: this.track, weather, wetStart: false, difficulty: this.difficulty, rejoined: true });
       if (this.paused) {
         const by = this.playerStates.get(this.pausedBy);
         messages.push({ type: 'pause', paused: true, by: by ? by.name : null, byId: this.pausedBy });
@@ -447,7 +448,9 @@ export class RaceRoom {
     this.lastTickAt = null;
     this.clearPause();
     this.pausedTotalMs = 0;
-    this.raceStartedAt = this.raceNow();
+    // El cronómetro (y la carrera) arrancan cuando el semáforo se pone en verde.
+    this.greenAt = this.raceNow() + START_HOLD_MS;
+    this.raceStartedAt = this.greenAt;
     this.firstFinishAt = null;
     this.concurrencyResolver.reset(this.track);
     // Si en la región llueve de verdad, se arranca con la pista mojada y charcos llenos.
@@ -473,7 +476,8 @@ export class RaceRoom {
       track: this.track,
       weather,
       wetStart,
-      difficulty: this.difficulty
+      difficulty: this.difficulty,
+      greenInMs: START_HOLD_MS
     });
     this.tickHandle = setInterval(() => this.tick(), TICK_MS);
   }
@@ -499,6 +503,13 @@ export class RaceRoom {
     const gripFactor = this.eventManager.gripFactor();
     this.puddles.update(TICK_MS, this.eventManager.rainActive);
     const track = this.track;
+
+    // Salida: hasta que el semáforo se pone en verde nadie se mueve, aunque
+    // tenga el acelerador presionado (al verde arranca con él).
+    if (now < this.greenAt) {
+      this.broadcastState(now);
+      return;
+    }
 
     for (const p of this.playerStates.values()) {
       if (p.isBot && !p.finished) {
@@ -538,18 +549,15 @@ export class RaceRoom {
       }
     }
 
+    // Los karts ya no se atraviesan: choques resueltos después de mover a todos.
+    const bumps = this.gameEngine.resolveCollisions([...this.playerStates.values()], track);
+    if (bumps) metrics.gameEvents.inc({ kind: 'kart_bump' }, bumps);
+
     const expiredEvent = this.eventManager.tick(now);
     if (expiredEvent) metrics.gameEvents.inc({ kind: expiredEvent.type });
     if (expiredEvent) this.broadcast({ type: 'event', kind: expiredEvent.type });
 
-    this.broadcast({
-      type: 'state',
-      t: now - this.raceStartedAt,
-      rainActive: this.eventManager.rainActive,
-      puddles: this.puddles.anyWater ? this.puddles.serialize() : [],
-      players: [...this.playerStates.values()].map(p => ({ ...this.gameEngine.serializePlayer(p, now), isBot: !!p.isBot })),
-      pickups: this.concurrencyResolver.serialize(now)
-    });
+    this.broadcastState(now);
 
     // Fin de carrera (HU05): todos llegaron, o expiró el tiempo límite. Sin
     // esto, un jugador quieto o desconectado dejaba la carrera colgada.
@@ -559,6 +567,17 @@ export class RaceRoom {
     if (allFinished || graceExpired || timeLimitExpired) {
       this.finishRace(allFinished ? 'all_finished' : graceExpired ? 'grace' : 'time_limit');
     }
+  }
+
+  broadcastState(now) {
+    this.broadcast({
+      type: 'state',
+      t: now - this.raceStartedAt,
+      rainActive: this.eventManager.rainActive,
+      puddles: this.puddles.anyWater ? this.puddles.serialize() : [],
+      players: [...this.playerStates.values()].map(p => ({ ...this.gameEngine.serializePlayer(p, now), isBot: !!p.isBot })),
+      pickups: this.concurrencyResolver.serialize(now)
+    });
   }
 
   finishRace(reason = 'all_finished') {
