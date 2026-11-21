@@ -164,6 +164,8 @@ test('pausa: Esc la pide, el menú dice cuántas quedan y se puede abandonar o r
   c.$('#btn-pause').click();
   c.$('#btn-quit-race').click();
   c.$('#btn-quit-confirm').click();
+  assert.equal(ws.sentOfType('leave').length, 1, 'avisa que abandona');
+  ws.receive({ type: 'left' });
   await waitFor(() => c.navigations() > 0);
 });
 

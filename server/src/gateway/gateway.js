@@ -91,7 +91,7 @@ function routeLabel(url, status) {
 }
 
 const CLIENT_MESSAGE_TYPES = new Set([
-  'join', 'ready', 'select_track', 'select_time', 'select_difficulty', 'toggle_bots', 'input', 'toggle_pause', 'restart'
+  'join', 'ready', 'select_track', 'select_time', 'select_difficulty', 'toggle_bots', 'input', 'toggle_pause', 'restart', 'leave'
 ]);
 
 // Límite de mensajes por conexión (token bucket). Un jugador real manda
@@ -435,6 +435,13 @@ export function createGateway({ clientDir, room, auth, metricsToken = process.en
           break;
         case 'restart':
           room.requestRestart(playerId);
+          break;
+        case 'leave':
+          // Abandono a propósito: sale de la sala ya, sin los 30 s de gracia de
+          // una desconexión (si no, al volver lo metía otra vez en esa carrera).
+          room.removePlayer(playerId);
+          joined = false;
+          sendTo(ws, { type: 'left' });
           break;
         default:
           break;

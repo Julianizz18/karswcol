@@ -147,3 +147,32 @@ test('repetido 200 veces con orden aleatorio, nunca hay dos dueños del mismo ob
     assert.equal(owners[0].by, players.find(p => engine.isBoosted(p, 0)).name, 'el dueño es el primero que llegó');
   }
 });
+
+test('abandonar a propósito sale de inmediato: al volver no regresa a esa carrera', async () => {
+  // La prueba anterior deja una carrera con karts en período de gracia: sala limpia.
+  room.resetToLobby();
+  const opened = [];
+  const track = async name => { const c = await connect(name); opened.push(c); return c; };
+  try {
+  const a = await track('abandona');
+  const b = await track('sigue');
+  for (const c of [a, b]) c.ws.send(JSON.stringify({ type: 'join', name: c.name, color: '#FCD116' }));
+  await waitUntil(() => a.ofType('joined').length && b.ofType('joined').length);
+  for (const c of [a, b]) c.ws.send(JSON.stringify({ type: 'ready' }));
+  await waitUntil(() => a.ofType('race_start').length === 1, 10000);
+  const oldId = a.ofType('joined')[0].id;
+  a.ws.send(JSON.stringify({ type: 'leave' }));
+  await waitUntil(() => a.ofType('left').length === 1);
+  assert.ok(!room.playerStates.has(oldId), 'sale sin período de gracia');
+  a.ws.close();
+  // Vuelve a entrar con la misma cuenta mientras la carrera sigue: no recupera el kart.
+  const again = await track('abandona');
+  again.ws.send(JSON.stringify({ type: 'join', name: 'abandona', color: '#FCD116' }));
+  await waitUntil(() => again.ofType('joined').length + again.ofType('join_rejected').length >= 1);
+  assert.equal(again.ofType('joined').length, 0);
+  assert.match(again.ofType('join_rejected')[0].reason, /carrera en curso/);
+  } finally {
+    for (const c of opened) c.ws.terminate();
+    room.resetToLobby();
+  }
+});

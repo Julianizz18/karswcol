@@ -843,7 +843,14 @@
   // Recargar cierra el WebSocket: el servidor saca al jugador de la carrera
   // (y la reanuda para los demás si era quien la pausó). La sesión de Google
   // se mantiene, así que vuelve directo al menú.
-  document.getElementById('btn-quit-confirm').addEventListener('click', () => location.reload());
+  // Abandonar avisa al servidor (sale de la sala sin período de gracia) y
+  // recarga cuando lo confirma; si no responde en 1 s, recarga igual.
+  document.getElementById('btn-quit-confirm').addEventListener('click', () => {
+    const reload = () => location.reload();
+    Net.on('left', reload);
+    setTimeout(reload, 1000);
+    Net.send('leave');
+  });
 
   window.addEventListener('keydown', e => {
     if (isTyping(e)) return;
