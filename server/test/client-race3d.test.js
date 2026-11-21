@@ -157,3 +157,19 @@ test('al ocultar la pantalla de carrera deja de dibujar', async () => {
   assert.equal(renderer.renders, frozen);
   doc.getElementById('screen-race').classList.add('active');
 });
+
+test('el cóndor da la salida, avisa la última vuelta y baja a rescatar', async () => {
+  const track = roundTrip(TRACKS[2]);
+  Race3D.setTrack(track, null);
+  const { x, y } = track.startLine;
+  const players = [kart('1', '#FCD116', x, y)];
+  const before = renderer.renders;
+  Race3D.condor('start');
+  for (let i = 0; i < 6; i++) { Race3D.update(players, '1', [], false, []); await tick(40); }
+  Race3D.condor('lastLap');
+  for (let i = 0; i < 4; i++) { Race3D.update(players, '1', [], false, []); await tick(40); }
+  Race3D.condor('rescue', { x: x + 50, y });
+  for (let i = 0; i < 4; i++) { Race3D.update(players, '1', [], false, []); await tick(40); }
+  Race3D.condor('no-existe'); // se ignora
+  assert.ok(renderer.renders > before + 5);
+});

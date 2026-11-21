@@ -2010,6 +2010,163 @@ function sampleState(renderTime) {
   return snapshots[0];
 }
 
+// ---------- El cóndor ----------
+// El "comisario" de la carrera: un cóndor andino con sombrero vueltiao.
+// Da la salida con un semáforo, avisa la última vuelta con una pancarta y
+// baja en picada a rescatar a los karts trabados (evento condor_rescue del
+// servidor). Es solo visual: el rescate lo decide el servidor.
+const CONDOR_BLACK = '#1d1d1f';
+const CONDOR_WHITE = '#f1efe8';
+const VUELTIAO_CREAM = '#eadcb4';
+let condor = null;
+const condorState = { mode: null, start: 0, duration: 0, target: null };
+
+function buildCondor() {
+  const root = new THREE.Group();
+  const body = new THREE.Group(); // se balancea en vuelo
+  root.add(body);
+
+  const torso = new THREE.Mesh(new THREE.IcosahedronGeometry(3, 1), mat(CONDOR_BLACK));
+  torso.scale.set(1.7, 1, 1.1);
+  body.add(torso);
+  // Collar blanco, la marca del cóndor andino.
+  const ruff = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.75, 6, 12), mat(CONDOR_WHITE));
+  ruff.position.set(4, 1.4, 0);
+  ruff.rotation.y = Math.PI / 2;
+  body.add(ruff);
+  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4, 0), mat('#7b4b44'));
+  head.position.set(5.2, 2, 0);
+  body.add(head);
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.8, 6), mat('#e8dcc0'));
+  beak.rotation.z = -Math.PI / 2;
+  beak.position.set(6.6, 1.8, 0);
+  body.add(beak);
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(3, 0.4, 3), mat(CONDOR_BLACK));
+  tail.position.set(-5.4, 0.2, 0);
+  body.add(tail);
+
+  // Alas: negras con la franja blanca de las plumas secundarias.
+  const wings = [];
+  for (const side of [-1, 1]) {
+    const pivot = new THREE.Group();
+    pivot.position.set(0.5, 1, side * 2.6);
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(5, 0.35, 12), mat(CONDOR_BLACK));
+    wing.position.z = side * 6;
+    const band = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.4, 10), mat(CONDOR_WHITE));
+    band.position.set(-1.4, 0.05, side * 6.4);
+    pivot.add(wing, band);
+    body.add(pivot);
+    wings.push({ pivot, side });
+  }
+
+  // Sombrero vueltiao: copa y ala color crema con franjas negras.
+  const hat = new THREE.Group();
+  hat.position.set(5.2, 3.2, 0);
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.4, 0.25, 20), mat(VUELTIAO_CREAM));
+  const crown = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.6, 2, 16), mat(VUELTIAO_CREAM));
+  crown.position.y = 1.1;
+  hat.add(brim, crown);
+  for (const r of [2.2, 2.9]) {
+    const stripe = new THREE.Mesh(new THREE.TorusGeometry(r, 0.12, 4, 24), mat(CONDOR_BLACK));
+    stripe.rotation.x = Math.PI / 2;
+    stripe.position.y = 0.14;
+    hat.add(stripe);
+  }
+  for (const y of [0.55, 1.15, 1.75]) {
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(1.33 + (1.75 - y) * 0.16, 1.33 + (1.75 - y) * 0.16, 0.18, 16), mat(CONDOR_BLACK));
+    band.position.y = y;
+    hat.add(band);
+  }
+  body.add(hat);
+
+  // Lo que lleva colgando: el semáforo de la salida o la pancarta.
+  const semaforo = new THREE.Group();
+  semaforo.position.set(1, -6, 0);
+  semaforo.add(new THREE.Mesh(new THREE.BoxGeometry(1.6, 6, 1.6), mat('#22262e')));
+  const lights = [2, 0, -2].map(y => {
+    const light = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 8), new THREE.MeshBasicMaterial({ color: '#3a1a1a' }));
+    light.position.set(0.85, y, 0);
+    semaforo.add(light);
+    return light;
+  });
+  const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3, 4), mat('#8a6a43'));
+  rope.position.set(1, -1.8, 0);
+  body.add(rope, semaforo);
+
+  const banner = new THREE.Mesh(
+    new THREE.PlaneGeometry(22, 5.5),
+    new THREE.MeshBasicMaterial({ map: bannerTexture('¡ÚLTIMA VUELTA!', { bg: '#d2343a', fg: '#ffffff', stripe: '#f2c230' }), side: THREE.DoubleSide, transparent: true })
+  );
+  banner.position.set(0, -6.5, 0);
+  banner.rotation.y = Math.PI / 2;
+  body.add(banner);
+
+  root.visible = false;
+  root.userData = { body, wings, semaforo, lights, banner, rope };
+  scene.add(root);
+  return root;
+}
+
+/** El cliente avisa al cóndor: 'start', 'lastLap' o 'rescue' ({x, y}). */
+function showCondor(mode, data = {}) {
+  if (!renderer) return;
+  if (!condor) condor = buildCondor();
+  const durations = { start: 2600, lastLap: 3200, rescue: 1800 };
+  if (!durations[mode]) return;
+  Object.assign(condorState, { mode, start: performance.now(), duration: durations[mode], target: data });
+  const { semaforo, banner, rope, lights } = condor.userData;
+  semaforo.visible = mode === 'start';
+  rope.visible = mode === 'start';
+  banner.visible = mode === 'lastLap';
+  lights.forEach(l => l.material.color.set('#3a1a1a'));
+  condor.visible = true;
+}
+
+function updateCondor(now) {
+  if (!condor || !condor.visible) return;
+  const t = (now - condorState.start) / condorState.duration;
+  if (t >= 1) {
+    condor.visible = false;
+    condorState.mode = null;
+    return;
+  }
+  const { body, wings, lights } = condor.userData;
+  // Aleteo lento y planeo, como un cóndor de verdad.
+  const flap = Math.sin(now / 160) * 0.35;
+  wings.forEach(({ pivot, side }) => { pivot.rotation.x = side * flap; });
+  body.rotation.z = Math.sin(now / 420) * 0.06;
+
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward);
+  forward.y = 0;
+  forward.normalize();
+  const ease = x => 1 - (1 - x) ** 3;
+
+  if (condorState.mode === 'start' || condorState.mode === 'lastLap') {
+    // Entra desde arriba, se queda frente a la cámara y se va hacia un lado.
+    const enter = ease(Math.min(1, t / 0.25));
+    const leave = t > 0.8 ? (t - 0.8) / 0.2 : 0;
+    const side = new THREE.Vector3(-forward.z, 0, forward.x);
+    condor.position.copy(camera.position)
+      .addScaledVector(forward, 42)
+      .addScaledVector(side, leave * 60);
+    condor.position.y = camera.position.y + 8 + (1 - enter) * 40 + leave * 20;
+    condor.lookAt(camera.position.x, condor.position.y, camera.position.z);
+    condor.rotateY(-Math.PI / 2); // el modelo mira hacia +x
+    if (condorState.mode === 'start') {
+      // Rojo, rojo, rojo… y verde: ¡ya!
+      const green = t > 0.35;
+      lights.forEach((l, i) => l.material.color.set(green ? (i === 2 ? '#3ccf6e' : '#203a24') : (t > 0.1 * (i + 1) ? '#ef4433' : '#3a1a1a')));
+    }
+  } else if (condorState.mode === 'rescue' && condorState.target) {
+    // Picada sobre el kart rescatado y vuelta a subir.
+    const { x, y } = condorState.target;
+    const dive = t < 0.5 ? ease(t / 0.5) : 1 - (t - 0.5) / 0.5;
+    condor.position.set(x - forward.x * 10, 18 + (1 - dive) * 70, y - forward.z * 10);
+    condor.rotation.set(0, Math.atan2(-forward.z, forward.x), 0);
+  }
+}
+
 function frame(now) {
   rafHandle = null;
   if (!isVisible()) return;
@@ -2041,6 +2198,7 @@ function frame(now) {
     }
   });
   updatePickups(state.pickups || [], now);
+  updateCondor(now);
 
   if (me) {
     // Cámara de persecución suavizada.
@@ -2123,6 +2281,8 @@ window.Race3D = {
   get qualityMode() { return qualityMode; },
   setQualityMode,
   /** true mientras se dibuja la vista 3D (y no la 2D). */
-  get active() { return !!renderer && isVisible(); }
+  get active() { return !!renderer && isVisible(); },
+  /** El cóndor: 'start' (salida), 'lastLap' (última vuelta) o 'rescue' ({x, y}). */
+  condor: showCondor
 };
 window.dispatchEvent(new Event('race3d-ready'));
