@@ -503,6 +503,7 @@ function buildMountains(track, pal, horizon, rand) {
   const material = new THREE.MeshBasicMaterial({ color, fog: false });
   const geometry = new THREE.ConeGeometry(1, 1, 5);
   const count = 56;
+  const snowCaps = [];
   const mesh = new THREE.InstancedMesh(geometry, material, count);
   const m = new THREE.Matrix4();
   const c = boundsCenter(track);
@@ -511,15 +512,152 @@ function buildMountains(track, pal, horizon, rand) {
     const dist = c.size / 2 + 1300 + rand() * 500;
     const height = (track.id === 'llanos' || track.id === 'caribe' ? 90 : 220) + rand() * 260;
     const width = 260 + rand() * 260;
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI);
     m.compose(
       new THREE.Vector3(c.x + Math.cos(a) * dist, height / 2 - 20, c.z + Math.sin(a) * dist),
-      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI),
+      q,
       new THREE.Vector3(width, height, width)
     );
     mesh.setMatrixAt(i, m);
+    // Nieve en las cumbres altas: todas en los Andes, solo las más altas en el
+    // Eje Cafetero. Misma rotación que su montaña (conos de 5 caras).
+    const snowy = (track.id === 'andes' && height > 260) || (track.id === 'cafetero' && height > 400);
+    if (snowy) snowCaps.push({ position: new THREE.Vector3(c.x + Math.cos(a) * dist, 0, c.z + Math.sin(a) * dist), height, width, q });
   }
   group.add(mesh);
+  if (snowCaps.length) group.add(buildSnowCaps(snowCaps, horizon));
   return group;
+}
+
+/** Casquete de nieve: el tercio superior del mismo cono, en blanco. */
+function buildSnowCaps(peaks, horizon) {
+  const f = 0.34;
+  const material = new THREE.MeshBasicMaterial({ color: new THREE.Color('#f4f7fb').lerp(horizon, 0.18), fog: false });
+  const mesh = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 5), material, peaks.length);
+  const m = new THREE.Matrix4();
+  peaks.forEach(({ position, height, width, q }, i) => {
+    const top = height - 20;
+    m.compose(
+      new THREE.Vector3(position.x, top - (f * height) / 2 + 1, position.z),
+      q,
+      new THREE.Vector3(width * f * 1.04, height * f, width * f * 1.04)
+    );
+    mesh.setMatrixAt(i, m);
+  });
+  return mesh;
+}
+
+// ---------- Paisaje de cada región ----------
+// Elementos grandes que se reconocen de lejos: el mar y la muralla de
+// Cartagena, el volcán nevado del Eje Cafetero, los ríos de los Llanos y la
+// Amazonía con sus palmas y ceibas. Pocas mallas (instanciadas) para no
+// afectar los FPS; todo queda fuera de la carretera y de la vegetación.
+
+function instanced(geometry, color, transforms, { basic = false } = {}) {
+  const material = basic ? new THREE.MeshBasicMaterial({ color }) : new THREE.MeshLambertMaterial({ color, flatShading: true });
+  const mesh = new THREE.InstancedMesh(geometry, material, transforms.length);
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  transforms.forEach(([x, y, z, sx, sy, sz, rot = 0], i) => {
+    q.setFromAxisAngle(up, rot);
+    m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sx, sy, sz));
+    mesh.setMatrixAt(i, m);
+  });
+  return mesh;
+}
+
+/** Franja de agua paralela al eje x, entre z1 y z2. */
+function waterBand(c, z1, z2, color, length = 14000) {
+  const water = new THREE.Mesh(
+    new THREE.PlaneGeometry(length, Math.abs(z2 - z1)),
+    new THREE.MeshLambertMaterial({ color, emissive: new THREE.Color(color).multiplyScalar(0.25) })
+  );
+  water.rotation.x = -Math.PI / 2;
+  water.position.set(c.x, 0.8, (z1 + z2) / 2);
+  return water;
+}
+
+function buildLandscape(track, rand) {
+  const group = new THREE.Group();
+  const b = track.bounds;
+  const c = boundsCenter(track);
+  const r = (min, max) => min + rand() * (max - min);
+
+  if (track.id === 'caribe') {
+    // Playa, mar Caribe, la muralla de Cartagena y veleros.
+    const shore = b.maxY + 500;
+    group.add(waterBand(c, shore - 90, shore, '#e7d6a3'));               // arena
+    group.add(waterBand(c, shore, shore + 7000, '#1e86ad'));             // mar
+    const wallZ = shore - 140;
+    const segments = [];
+    const merlons = [];
+    for (let i = -14; i <= 14; i++) {
+      const x = c.x + i * 34;
+      segments.push([x, 11, wallZ, 34, 22, 14]);
+      if (i % 2 === 0) merlons.push([x, 25, wallZ, 12, 6, 14]);
+    }
+    group.add(instanced(new THREE.BoxGeometry(1, 1, 1), '#cdb68a', segments));
+    group.add(instanced(new THREE.BoxGeometry(1, 1, 1), '#b9a074', merlons));
+    const hulls = [];
+    const sails = [];
+    for (let i = 0; i < 9; i++) {
+      const x = c.x + r(-2500, 2500);
+      const z = shore + r(500, 3000);
+      const rot = r(0, Math.PI);
+      hulls.push([x, 3, z, 30, 6, 10, rot]);
+      sails.push([x, 22, z, 2, 30, 22, rot]);
+    }
+    group.add(instanced(new THREE.BoxGeometry(1, 1, 1), '#f3efe4', hulls));
+    group.add(instanced(new THREE.ConeGeometry(0.5, 1, 3), '#fbfaf6', sails));
+  } else if (track.id === 'cafetero') {
+    // Colinas cafeteras y el volcán nevado al fondo.
+    const hills = [];
+    for (let i = 0; i < 22; i++) {
+      // Sobre una elipse que rodea el rectángulo de la pista con 1.300 de
+      // margen: ninguna colina (radio ≤ 420) alcanza la carretera, ni en las esquinas.
+      const a = (i / 22) * Math.PI * 2 + r(0, 0.2);
+      const hx = (b.maxX - b.minX) / 2 + 1300;
+      const hz = (b.maxY - b.minY) / 2 + 1300;
+      hills.push([c.x + Math.cos(a) * hx, -10, c.z + Math.sin(a) * hz, r(260, 420), r(70, 140), r(260, 420), r(0, 3)]);
+    }
+    const hillGeo = new THREE.IcosahedronGeometry(1, 1);
+    group.add(instanced(hillGeo, '#3d7a32', hills));
+    const vx = c.x + c.size / 2 + 1500;
+    const vz = c.z - 900;
+    group.add(instanced(new THREE.ConeGeometry(1, 1, 9), '#6d6a5f', [[vx, 430, vz, 900, 900, 900]], { basic: true }));
+    group.add(instanced(new THREE.ConeGeometry(1, 1, 9), '#f2f5f8', [[vx, 762, vz, 260, 280, 260]], { basic: true }));
+  } else if (track.id === 'llanos') {
+    // Río llanero con morichales en la orilla.
+    const z1 = b.minY - 760;
+    group.add(waterBand(c, z1, z1 + 240, '#6e7f6a'));
+    const trunks = [];
+    const crowns = [];
+    for (let i = 0; i < 46; i++) {
+      const x = c.x + r(-2200, 2200);
+      const z = z1 + 240 + r(20, 70);
+      const h = r(28, 40);
+      trunks.push([x, h / 2, z, 1.4, h, 1.4]);
+      crowns.push([x, h + 2, z, r(9, 12), 3.5, r(9, 12), r(0, 3)]);
+    }
+    group.add(instanced(new THREE.CylinderGeometry(1, 1.2, 1, 6), '#6b5a43', trunks));
+    group.add(instanced(new THREE.IcosahedronGeometry(1, 0), '#4f7a2a', crowns));
+  } else if (track.id === 'amazonia') {
+    // El gran río color café y ceibas gigantes en la otra orilla.
+    const z1 = b.maxY + 520;
+    group.add(waterBand(c, z1, z1 + 460, '#7a6646'));
+    const trunks = [];
+    const crowns = [];
+    for (let i = 0; i < 16; i++) {
+      const x = c.x + r(-2600, 2600);
+      const z = z1 + 460 + r(80, 600);
+      trunks.push([x, 45, z, 7, 90, 7]);
+      crowns.push([x, 98, z, r(60, 85), r(22, 30), r(60, 85), r(0, 3)]);
+    }
+    group.add(instanced(new THREE.CylinderGeometry(0.7, 1.3, 1, 8), '#5e4a35', trunks));
+    group.add(instanced(new THREE.IcosahedronGeometry(1, 1), '#1f5e2a', crowns));
+  }
+  return group.children.length ? group : null;
 }
 
 function buildTrees(track, rand) {
@@ -1116,6 +1254,8 @@ function buildTrack(track) {
   // Semilla propia: agregar elementos regionales no mueve árboles, montañas ni nubes.
   const regionalProps = buildRegionalProps(track, seededRandom(`${track.id}-props`));
   if (regionalProps) group.add(regionalProps);
+  const landscape = buildLandscape(track, seededRandom(`${track.id}-paisaje`));
+  if (landscape) group.add(landscape);
   if (!look.isDay) group.add(buildFloodlights(track));
   atmosphere = buildAtmosphere(track, look, rand);
   group.add(atmosphere.group);
