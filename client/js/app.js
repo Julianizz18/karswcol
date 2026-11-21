@@ -358,6 +358,12 @@
     document.getElementById('btn-toggle-bots').setAttribute('aria-checked', String(fillWithBots));
   }
 
+  /** El cóndor solo existe en la vista 3D; en 2D quedan los avisos. */
+  function callCondor(mode, data) {
+    const race3d = window.Race3D;
+    if (race3d && race3d.supported && typeof race3d.condor === 'function') race3d.condor(mode, data);
+  }
+
   /** 83456 ms -> "1:23.46" */
   function formatLapTime(ms) {
     // En centésimas enteras: redondear antes de separar minutos evita "0:60.00".
@@ -548,6 +554,8 @@
       }
       document.getElementById('hud-track').textContent = `${msg.track.name}`;
       Router.show('race');
+      // El cóndor da la salida (no al volver a mitad de carrera).
+      if (!msg.rejoined) callCondor('start');
     });
 
     Net.on('state', msg => {
@@ -585,9 +593,14 @@
         if (backLobbyBtn.disabled) backLobbyBtn.textContent = `Esperando a los demás (${msg.votes}/${msg.total})…`;
       } else if (msg.kind === 'player_disconnected') {
         showToast(`📡 ${msg.name} se desconectó: tiene ${Math.round(msg.graceMs / 1000)} s para volver`);
+      } else if (msg.kind === 'condor_rescue') {
+        callCondor('rescue', { x: msg.x, y: msg.y });
+        showToast(msg.playerId === selfId ? '🦅 El cóndor te devolvió a la pista' : `🦅 El cóndor rescató a ${msg.name}`);
       } else if (msg.kind === 'lap_completed' && msg.playerId === selfId) {
         const lapTime = msg.lapTimeMs != null ? ` · ${formatLapTime(msg.lapTimeMs)}` : '';
         showToast(msg.lap >= 3 ? `¡Última vuelta completada!${lapTime} 🏁` : `¡Vuelta ${msg.lap}/3 completada!${lapTime}`);
+        // Empieza la última vuelta: el cóndor pasa con la pancarta.
+        if (msg.lap === 2) callCondor('lastLap');
       }
     });
 

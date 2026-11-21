@@ -226,3 +226,17 @@ test('al volver a mitad de carrera (rejoined) entra directo a la carrera', async
   ws.receive({ type: 'pause', paused: true, by: 'Sara', byId: '2' });
   assert.equal(c.$('#pause-overlay').hidden, false);
 });
+
+test('el cóndor: salida, última vuelta y rescates con su aviso', async () => {
+  const calls = [];
+  const race3d = { supported: true, qualityMode: 'auto', setQualityMode() {}, setTrack() {}, update() {}, condor: (mode, data) => calls.push([mode, data]) };
+  const c = createClient({ race3d });
+  const ws = await startRace(c);
+  ws.receive({ type: 'event', kind: 'lap_completed', playerId: '1', lap: 2, lapTimeMs: 60000 });
+  ws.receive({ type: 'event', kind: 'condor_rescue', playerId: '1', name: 'Johan', x: 10, y: 20 });
+  assert.equal(toast(c), '🦅 El cóndor te devolvió a la pista');
+  ws.receive({ type: 'event', kind: 'condor_rescue', playerId: '2', name: 'Sara', x: 5, y: 6 });
+  assert.equal(toast(c), '🦅 El cóndor rescató a Sara');
+  // Los objetos vienen del realm de jsdom: se comparan por contenido.
+  assert.equal(JSON.stringify(calls), JSON.stringify([['start', undefined], ['lastLap', undefined], ['rescue', { x: 10, y: 20 }], ['rescue', { x: 5, y: 6 }]]));
+});
