@@ -15,6 +15,13 @@ export const WALL_IMPACT_DAMPING = 0.3;
 export const WALL_IMPACT_MAX_SPEED = 1;
 // Tras un golpe el kart queda "aturdido" (trompo): no acelera durante estos ticks.
 export const CRASH_STUN_TICKS = 12;
+// El cóndor (rescate): un kart que acelera sin avanzar 3 s (trabado contra el
+// muro) o que va 4 s en contravía vuelve a la línea central, mirando hacia
+// adelante. Velocidad por debajo de la cual se considera "sin avanzar".
+export const STUCK_SPEED = 0.4;
+export const STUCK_RESCUE_TICKS = 60;       // 3 s a 20 Hz
+export const WRONG_WAY_RESCUE_TICKS = 80;   // 4 s a 20 Hz
+export const WRONG_WAY_ANGLE = 2.2;         // rad (~126°) contra la tangente de la pista
 // Frenos más fuertes que el acelerador: frenar tarde antes de una curva es posible.
 export const BRAKE = 0.42;
 // Agarre de los neumáticos: la aceleración lateral (velocidad × cambio de

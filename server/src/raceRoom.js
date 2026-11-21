@@ -489,6 +489,12 @@ export class RaceRoom {
 
       const puddle = this.puddles.puddleAt(p.x, p.y);
       const lapEvent = this.gameEngine.step(p, now, this.raceStartedAt, speedFactor, track, gripFactor, puddle);
+      // El cóndor rescata al kart trabado contra el muro o en contravía.
+      if (this.gameEngine.needsRescue(p, track)) {
+        const rescue = this.gameEngine.rescue(p, track);
+        metrics.gameEvents.inc({ kind: rescue.type });
+        this.broadcast({ type: 'event', kind: rescue.type, playerId: rescue.playerId, name: rescue.name, x: rescue.x, y: rescue.y });
+      }
       if (lapEvent) {
         if (lapEvent.finished && this.firstFinishAt === null) this.firstFinishAt = now;
         metrics.lapsCompleted.inc({ kind: p.isBot ? 'bot' : 'human' });

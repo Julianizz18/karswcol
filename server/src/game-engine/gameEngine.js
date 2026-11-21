@@ -1,7 +1,8 @@
 import {
   TURN_SPEED, ACCEL, BRAKE, FRICTION, MAX_SPEED, WALL_GRAZE_DAMPING, WALL_IMPACT_DEPTH, WALL_IMPACT_DAMPING, WALL_IMPACT_MAX_SPEED, CRASH_STUN_TICKS, GRIP, SKID_SLIP_ANGLE, SKID_SCRUB, SKID_MAX_SCRUB,
   TOTAL_LAPS, BOOST_DURATION_MS, BOOST_MULTIPLIER,
-  PUDDLE_GRIP_FACTOR, PUDDLE_DRAG, AQUAPLANING_MIN_SPEED
+  PUDDLE_GRIP_FACTOR, PUDDLE_DRAG, AQUAPLANING_MIN_SPEED,
+  STUCK_SPEED, STUCK_RESCUE_TICKS, WRONG_WAY_RESCUE_TICKS, WRONG_WAY_ANGLE
 } from './gameplayConfig.js';
 
 // Game Engine — server-authoritative (HU02, componente "Game Engine" de la
@@ -212,6 +213,34 @@ export class GameEngine {
 
   applyBoost(p, now) {
     p.boostUntil = now + BOOST_DURATION_MS;
+  }
+
+  /**
+   * Cuenta cuánto lleva el kart trabado (acelerando sin avanzar) o en
+   * contravía. Devuelve true cuando le toca el rescate del cóndor.
+   * Se llama una vez por tick, después de step().
+   */
+  needsRescue(p, track) {
+    if (p.finished) return false;
+    p.stuckTicks = p.input.up && Math.abs(p.speed) < STUCK_SPEED ? (p.stuckTicks || 0) + 1 : 0;
+    const tangent = track.path.tangent[p.trackIdx ?? 0];
+    const wrongWay = Math.abs(angleDiff(p.angle, tangent)) > WRONG_WAY_ANGLE && p.speed > STUCK_SPEED;
+    p.wrongWayTicks = wrongWay ? (p.wrongWayTicks || 0) + 1 : 0;
+    return p.stuckTicks >= STUCK_RESCUE_TICKS || p.wrongWayTicks >= WRONG_WAY_RESCUE_TICKS;
+  }
+
+  /** El cóndor deja el kart sobre la línea central, quieto y mirando hacia adelante. */
+  rescue(p, track) {
+    const i = p.trackIdx ?? this.locateOnTrack(p, track);
+    p.x = track.path.x[i];
+    p.y = track.path.y[i];
+    p.angle = track.path.tangent[i];
+    p.moveAngle = p.angle;
+    p.speed = 0;
+    p.crashTicks = 0;
+    p.stuckTicks = 0;
+    p.wrongWayTicks = 0;
+    return { type: 'condor_rescue', playerId: p.id, name: p.name, x: p.x, y: p.y };
   }
 
   isBoosted(p, now) {
